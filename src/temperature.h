@@ -4,6 +4,10 @@
 // Data wire is plugged into port 2 on the Arduino
 #define ONE_WIRE_BUS1 22
 
+#define TEMP_SENSOR_NOT_CONNECTED  -127
+
+#define TEMP_SENSOR_COUNT   2
+
 void temp_Init(void);
 float temp_GetTemperature(uint8_t u8_sensor);
 

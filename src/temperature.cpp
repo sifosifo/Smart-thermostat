@@ -13,6 +13,8 @@ DeviceAddress insideThermometer;
 
 uint8_t u8_temp_count = 0;
 
+uint8_t u8_ErrorCode[TEMP_SENSOR_COUNT] = {0, 0};
+
 // function to print the temperature for a device
 void printTemperature(DeviceAddress deviceAddress)
 {
@@ -32,10 +34,10 @@ void printTemperature(DeviceAddress deviceAddress)
   {
 //    fT1 = tempC;
   }
-  Serial.print("Temp C: ");
+/*  Serial.print("Temp C: ");
   Serial.print(tempC);
   Serial.print(" Temp F: ");
-  Serial.println(DallasTemperature::toFahrenheit(tempC)); // Converts tempC to Fahrenheit
+  Serial.println(DallasTemperature::toFahrenheit(tempC)); // Converts tempC to Fahrenheit*/
 }
 
 void temp_Init(void)
@@ -62,9 +64,9 @@ float temp_GetTemperature(uint8_t u8_sensor)
 {
   // call sensors.requestTemperatures() to issue a global temperature
   // request to all devices on the bus
-  Serial.print("Requesting temperatures...");
+//  Serial.print("Requesting temperatures...");
   sensors.requestTemperatures(); // Send the command to get temperatures
-  Serial.println("DONE");
+//  Serial.println("DONE");
 
   // It responds almost immediately. Let's print out the data
   printTemperature(insideThermometer); // Use a simple function to print out the data
