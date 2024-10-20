@@ -49,8 +49,10 @@ void loop_100ms(void)
 
 void loop_1s(void)
 {
-    f_RoomTemperature = temp_GetTemperature(ONE_WIRE_BUS1);
-    if(f_RoomTemperature == TEMP_SENSOR_NOT_CONNECTED)
+    f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
+    f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
+    
+    if((f_RoomTemperature == TEMP_SENSOR_NOT_CONNECTED) || (f_FloorTemperature == TEMP_SENSOR_NOT_CONNECTED))
     {
         out_Set(OFF_LOCKED);
     }else
@@ -128,11 +130,14 @@ void loop()
   if((u16_Time % 1000) == 0)   // 1s
   {
     loop_1s();
+    //Serial.println("11");
   }
 
   if((u16_Time % 8000) == 0)   // 8s
   {
+    //Serial.println("88");
     loop_8s();
+    u16_Time = 0;
   }
 
   delay(1);
