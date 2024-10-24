@@ -7,7 +7,10 @@ uint8_t u8_Time = 0;
 
 void out_Init(void)
 {
-
+    pinMode(OUT_1, OUTPUT);
+    digitalWrite(OUT_1, LOW);
+    pinMode(OUT_2, OUTPUT);
+    digitalWrite(OUT_2, LOW);
 }
 
 void out_Set(uint8_t u8_RequestedState)
@@ -17,6 +20,8 @@ void out_Set(uint8_t u8_RequestedState)
         if(u8_RequestedState == OFF)        // If requested OFF, go OFF imediately
         {
             CurrentOutputState = OFF;
+            digitalWrite(OUT_1, LOW);            
+            digitalWrite(OUT_2, LOW);
         }else
         {
             if(CurrentOutputState == OFF)   // Listen to ON request only if in OFF state
@@ -43,6 +48,7 @@ OutputState out_Tick(void)
             {
                 Serial.println("2");
                 CurrentOutputState = SET2ON;
+                digitalWrite(OUT_1, HIGH);            
             }else
             {
                 Serial.println("3");
@@ -59,6 +65,7 @@ OutputState out_Tick(void)
             {
                 Serial.println("6");
                 CurrentOutputState = ON;
+                digitalWrite(OUT_2, HIGH);
             }else
             {
                 Serial.println("7");

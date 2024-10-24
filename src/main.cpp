@@ -1,7 +1,7 @@
 // LCD zobrazuje hodnoty z premennych
 // Jeden senzor meria teplotu
 #include <TFT_eSPI.h>    // TFT display library
-#include <lvgl.h>        // LVGL library
+//#include <lvgl.h>        // LVGL library
 #include "../.pio/libdeps/esp32doit-devkit-v1/lvgl/examples/lv_examples.h"
 #include "temperature.h"
 #include "output.h"
@@ -13,8 +13,8 @@ uint32_t draw_buf[DRAW_BUF_SIZE / 4];
 
 float f_RoomTemperature = 0.5;
 float f_FloorTemperature = 0.5;
-float f_RoomTempTarget = 25.0;
-float f_FloorTempTarget = 25.0;
+float f_RoomTempTarget = 28.0;
+float f_FloorTempTarget = 28.0;
 
 OutputState CurrentOutState;
 uint16_t u16_Time = 0;
@@ -36,10 +36,9 @@ void setup()
   tft.setTextColor(TFT_WHITE);
   tft.println ("B");  
 
-  pinMode(17, OUTPUT);    // sets the digital pin 13 as output  
-
   temp_Init();
   //tft.println ("1");
+  out_Init();
 }
 
 void loop_100ms(void)
@@ -51,7 +50,7 @@ void loop_1s(void)
 {
     f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
     f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
-    
+
     if((f_RoomTemperature == TEMP_SENSOR_NOT_CONNECTED) || (f_FloorTemperature == TEMP_SENSOR_NOT_CONNECTED))
     {
         out_Set(OFF_LOCKED);
@@ -122,23 +121,27 @@ void loop()
   //u16_Time = u16_Time & ((2^13)-1);
   u16_Time = u16_Time & 8191;
 
-  if((u16_Time % 100) == 0)    // 100ms
-  {
-    loop_100ms();
-  }
-
-  if((u16_Time % 1000) == 0)   // 1s
-  {
-    loop_1s();
-    //Serial.println("11");
-  }
-
   if((u16_Time % 8000) == 0)   // 8s
   {
     //Serial.println("88");
     loop_8s();
     u16_Time = 0;
-  }
+  }else
 
+  if((u16_Time % 1000) == 0)   // 1s
+  {
+    loop_1s();
+    //Serial.println("11");
+    /*digitalWrite(OUT_1, LOW);            
+    digitalWrite(OUT_2, LOW);
+    delay(1000);
+    digitalWrite(OUT_1, HIGH);            
+    digitalWrite(OUT_2, HIGH);*/
+  }else
+
+  if((u16_Time % 100) == 0)    // 100ms
+  {
+    loop_100ms();
+  }
   delay(1);
 }

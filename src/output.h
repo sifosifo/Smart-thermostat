@@ -2,6 +2,9 @@
 #define OUTPUT_H_INCLUDED
 #include <stdint.h>
 
+#define OUT_1   16
+#define OUT_2   4
+
 enum OutputState
 {
     OFF = 0,

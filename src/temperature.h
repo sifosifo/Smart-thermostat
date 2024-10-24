@@ -2,7 +2,7 @@
 #define TEMPERATURE_H_INCLUDED
 
 // Data wire is plugged into port 2 on the Arduino
-#define ONE_WIRE_BUS1 27
+#define ONE_WIRE_BUS1 22
 
 #define TEMP_SENSOR_NOT_CONNECTED  -127
 
