@@ -43,7 +43,8 @@ bool measureOutput()
 // Function to trigger the ON sequence
 void out_TurnOnHeatingElement()
 {
-    if (sequenceState == IDLE) {
+    if ((sequenceState == IDLE) & (safetyRelayState == false))
+    {
         sequenceState = TURNING_ON_SAFETY;
     }
 }
@@ -51,7 +52,8 @@ void out_TurnOnHeatingElement()
 // Function to trigger the OFF sequence
 void out_TurnOffHeatingElement()
 {
-    if (sequenceState == IDLE) {
+    if ((sequenceState == IDLE) & (safetyRelayState == true))
+    {
         sequenceState = TURNING_OFF_WORK;
     }
 }
@@ -83,7 +85,11 @@ SequenceState out_ControlRelays()
                 sequenceState = VERIFY_ON;
             } else {
                 // If the output is already on before turning on the work relay, something went wrong
-                out_EnterDeadState();  // Enter dead state
+                /////////////////////////////////////////////////////////////////////////////// no measurement
+                //out_EnterDeadState();  // Enter dead state
+                WORK_RELAY_ON;  // Turn on work relay if output is still off
+                workRelayState = true;
+                sequenceState = VERIFY_ON;
             }
             break;
 
@@ -93,7 +99,9 @@ SequenceState out_ControlRelays()
                 sequenceState = IDLE;
             } else {
                 // If the output is not on, something failed
-                out_EnterDeadState();  // Enter dead state
+                /////////////////////////////////////////////////////////////////////////////// no measurement
+                //out_EnterDeadState();  // Enter dead state
+                sequenceState = IDLE;
             }
             break;
 
@@ -111,7 +119,11 @@ SequenceState out_ControlRelays()
                 sequenceState = VERIFY_OFF;
             } else {
                 // If the output is still on before turning off the safety relay, failure detected
-                out_EnterDeadState();  // Enter dead state
+                /////////////////////////////////////////////////////////////////////////////// no measurement
+                //out_EnterDeadState();  // Enter dead state
+                SAFETY_RELAY_OFF;  // Turn off safety relay if output is still off
+                safetyRelayState = false;
+                sequenceState = VERIFY_OFF;
             }
             break;
 
@@ -121,7 +133,9 @@ SequenceState out_ControlRelays()
                 sequenceState = IDLE;
             } else {
                 // If the output is not off, something failed
-                out_EnterDeadState();  // Enter dead state
+                /////////////////////////////////////////////////////////////////////////////// no measurement
+                //out_EnterDeadState();  // Enter dead state
+                sequenceState = IDLE;
             }
             break;
 

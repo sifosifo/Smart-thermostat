@@ -13,8 +13,8 @@ uint32_t draw_buf[DRAW_BUF_SIZE / 4];
 
 float f_RoomTemperature = 0.5;
 float f_FloorTemperature = 0.5;
-float f_RoomTempTarget = 28.0;
-float f_FloorTempTarget = 28.0;
+float f_RoomTempTarget = 19.0;
+float f_FloorTempTarget = 25.0;
 
 SequenceState CurrentSequenceState = IDLE;
 bool CurrentOutState = false;
@@ -27,6 +27,7 @@ void lv_tick_handler(void) {
 
 void setup()
 {
+  out_Init();
   // start serial port
   Serial.begin(115200);
 
@@ -38,8 +39,7 @@ void setup()
   tft.println ("B");  
 
   temp_Init();
-  //tft.println ("1");
-  out_Init();
+  //tft.println ("1");  
 }
 
 void loop_100ms(void)
@@ -49,6 +49,7 @@ void loop_100ms(void)
 
 void loop_1s(void)
 {
+    CurrentOutState = out_Get();
     f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
     f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
 
@@ -66,49 +67,56 @@ void loop_1s(void)
       }
     }
 
-    if (CurrentOutState == false)
+    if(CurrentSequenceState == DEAD)
+    {
+      tft.fillScreen(TFT_RED);
+    }else if(CurrentSequenceState != IDLE)
+    {
+      tft.fillScreen(TFT_BLUE);
+    }else if (CurrentOutState == false)
     {
       tft.fillScreen(TFT_BLACK);
     }else if(CurrentOutState == true)
     {
       tft.fillScreen(TFT_GREEN);
-    }else if(CurrentSequenceState == DEAD)
-    {
-      tft.fillScreen(TFT_RED);
-    }else
-    {
-      tft.fillScreen(TFT_BLUE);
     }
+    
     tft.setCursor(0,0,4);
-    tft.setTextColor(TFT_WHITE);
-    tft.print ("Podlaha="); tft.setCursor(120,0,4); tft.print(f_RoomTemperature); tft.print (" C");
+    tft.setTextColor(TFT_WHITE);    
+    tft.print ("Izba="); tft.setCursor(120,0,4); tft.print(f_RoomTemperature); tft.print (" C / ");  tft.print(f_RoomTempTarget); tft.print (" C");
+    
     tft.setCursor(0,30,4);
-    tft.print ("Izba="); tft.setCursor(120,30,4); tft.print(f_FloorTemperature); tft.print (" C");
+    tft.print ("Podlaha="); tft.setCursor(120,30,4); tft.print(f_FloorTemperature); tft.print (" C / "); tft.print(f_FloorTempTarget); tft.print (" C");
+    
     tft.setCursor(0,60,4);
-    tft.print ("Ciel="); tft.setCursor(120,60,4); tft.print(f_RoomTempTarget); tft.print (" C");
-    tft.setCursor(0,90,4);
-    tft.print ("Stav="); tft.setCursor(120,90,4);
-    if (CurrentOutState==false)
-    {    
-      tft.print("Vypnute");
-    }else if(CurrentOutState==true)
-    {    
-      tft.print("Zapnute");
-    }else if(CurrentSequenceState==DEAD)
+    tft.print ("Stav="); tft.setCursor(120,60,4);
+    if(CurrentSequenceState==DEAD)
     {
       tft.print("Chyba");
-    }else
+    }else if(CurrentSequenceState==IDLE)
     {
-      tft.print("Zapinam");
-      if(CurrentSequenceState == IDLE) tft.print("IDLE");
-      if(CurrentSequenceState == TURNING_ON_SAFETY) tft.print("TURNING_ON_SAFETY");
-      if(CurrentSequenceState == TURNING_ON_WORK) tft.print("TURNING_ON_WORK");
-      if(CurrentSequenceState == VERIFY_ON) tft.print("VERIFY_ON");
-      if(CurrentSequenceState == TURNING_OFF_WORK) tft.print("IDLE");
-      if(CurrentSequenceState == TURNING_OFF_SAFETY) tft.print("TURNING_ON_SAFETY");
-      if(CurrentSequenceState == VERIFY_OFF) tft.print("TURNING_ON_WORK");
-      if(CurrentSequenceState == DEAD) tft.print("VERIFY_ON");
+      if (CurrentOutState==false)
+      {    
+        tft.print("Vypnute");
+      }else if(CurrentOutState==true)
+      {    
+        tft.print("Zapnute");
+      }
+    }else    
+    {
+      tft.print("Prepinam");
     }
+
+    tft.setCursor(0,90,4);
+    tft.print ("Sekvencia="); tft.setCursor(120,90,4);
+    if(CurrentSequenceState == IDLE) tft.print("IDLE");
+    if(CurrentSequenceState == TURNING_ON_SAFETY) tft.print("TURNING_ON_SAFETY");
+    if(CurrentSequenceState == TURNING_ON_WORK) tft.print("TURNING_ON_WORK");
+    if(CurrentSequenceState == VERIFY_ON) tft.print("VERIFY_ON");
+    if(CurrentSequenceState == TURNING_OFF_WORK) tft.print("TURNING_OFF_WORK");
+    if(CurrentSequenceState == TURNING_OFF_SAFETY) tft.print("TURNING_OFF_SAFETY");
+    if(CurrentSequenceState == VERIFY_OFF) tft.print("VERIFY_OFF");
+    if(CurrentSequenceState == DEAD) tft.print("DEAD");    
 
 //    delay(1000);            // Give the processor some time
 //    digitalWrite(17, HIGH); // sets the digital pin 13 on
@@ -118,8 +126,7 @@ void loop_1s(void)
 
 void loop_8s(void)
 {
-  CurrentSequenceState = out_ControlRelays();
-  CurrentOutState = out_Get();
+  CurrentSequenceState = out_ControlRelays();  
 }
 
 void loop()

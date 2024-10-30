@@ -7,8 +7,8 @@
 #define TEMP_SENSOR_NOT_CONNECTED  -127
 
 #define TEMP_SENSOR_COUNT   2
-#define TEMP_SENSOR_FLOOR   0
-#define TEMP_SENSOR_ROOM    1
+#define TEMP_SENSOR_FLOOR   1
+#define TEMP_SENSOR_ROOM    0
 
 void temp_Init(void);
 float temp_GetTemperature(uint8_t u8_sensor);
