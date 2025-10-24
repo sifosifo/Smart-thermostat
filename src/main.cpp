@@ -15,6 +15,7 @@ float f_RoomTemperature = 0.5;
 float f_FloorTemperature = 0.5;
 float f_RoomTempTarget = 19.0;
 float f_FloorTempTarget = 25.0;
+float f_TempHysteresis = 0.5;
 
 SequenceState CurrentSequenceState = IDLE;
 bool CurrentOutState = false;
@@ -36,7 +37,7 @@ void setup()
   tft.fillScreen(TFT_BLACK);
   tft.setCursor(0,0,4);
   tft.setTextColor(TFT_WHITE);
-  tft.println ("B");  
+  tft.println ("v0.2");  
 
   temp_Init();
   //tft.println ("1");  
@@ -61,7 +62,7 @@ void loop_1s(void)
       if((f_RoomTemperature < f_RoomTempTarget) && (f_FloorTemperature < f_FloorTempTarget))
       {
         out_TurnOnHeatingElement();
-      }else
+      }else if((f_RoomTemperature > (f_RoomTempTarget + f_TempHysteresis)) || (f_FloorTemperature > f_FloorTempTarget))
       {
         out_TurnOffHeatingElement();
       }
