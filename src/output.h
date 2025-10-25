@@ -4,7 +4,7 @@
 
 #define SAFETY_RELAY_PIN    16
 #define WORK_RELAY_PIN      4
-#define AC_SENSE_PIN        17
+#define AC_SENSE_PIN        21
 
 enum SequenceState {
     IDLE,

@@ -37,10 +37,10 @@ void setup()
   tft.fillScreen(TFT_BLACK);
   tft.setCursor(0,0,4);
   tft.setTextColor(TFT_WHITE);
-  tft.println ("v0.2");  
+  tft.println ("v0.3");  
 
   temp_Init();
-  //tft.println ("1");  
+  tft.println ("1");  
 }
 
 void loop_100ms(void)
