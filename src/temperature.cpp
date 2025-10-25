@@ -36,11 +36,10 @@ void printTemperature(DeviceAddress deviceAddress)
   }
   Serial.print("Temp C: ");
   Serial.print(tempC);
-  Serial.print(" Temp F: ");
-  Serial.println(DallasTemperature::toFahrenheit(tempC)); // Converts tempC to Fahrenheit
+  Serial.print("\n");
 }
 
-void temp_Init(void)
+uint8_t temp_Init(void)
 {
     pinMode(ONE_WIRE_BUS1, INPUT_PULLUP);
     while(u8_temp_count == 0)
@@ -60,18 +59,20 @@ void temp_Init(void)
     // set the resolution to 9 bit (Each Dallas/Maxim device is capable of several different resolutions)
   sensors.setResolution(SensorAddress[TEMP_SENSOR_FLOOR], 9);
   sensors.setResolution(SensorAddress[TEMP_SENSOR_ROOM], 9);
+  
+  return(u8_temp_count);
 }
 
 float temp_GetTemperature(uint8_t u8_sensor)
 {
   // call sensors.requestTemperatures() to issue a global temperature
   // request to all devices on the bus
-  Serial.print("Requesting temperatures...");
+//  Serial.print("Requesting temperatures...");
   sensors.requestTemperatures(); // Send the command to get temperatures
-  Serial.println("DONE");
+//  Serial.println("DONE");
 
   // It responds almost immediately. Let's print out the data
-  printTemperature(SensorAddress[u8_sensor]); // Use a simple function to print out the data
+ // printTemperature(SensorAddress[u8_sensor]); // Use a simple function to print out the data
 
   return(sensors.getTempC(SensorAddress[u8_sensor]));
 }

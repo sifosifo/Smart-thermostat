@@ -23,6 +23,7 @@ void out_TurnOffHeatingElement(void);
 bool out_Get(void);
 SequenceState out_ControlRelays(void);
 void out_EnterDeadState(void);
+bool measureOutput(void);
 
 #endif
 

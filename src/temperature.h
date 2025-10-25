@@ -10,7 +10,7 @@
 #define TEMP_SENSOR_FLOOR   1
 #define TEMP_SENSOR_ROOM    0
 
-void temp_Init(void);
+uint8_t temp_Init(void);
 float temp_GetTemperature(uint8_t u8_sensor);
 
 #endif
