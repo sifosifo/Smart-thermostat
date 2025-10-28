@@ -12,10 +12,23 @@ static lv_color_t *buf1;
 static lv_color_t *buf2;
 
 uint16_t u16_Time = 0;
+float TemperatureRoom = 18.0;
+float TemperatureRoomTarget = 19.0;
+float TemperatureHysteresis = 2;
 lv_obj_t *meter;
 lv_meter_indicator_t *indic;
+lv_meter_indicator_t *hysteresis;
+lv_obj_t * temperature_big;
 
 TFT_eSPI tft = TFT_eSPI();
+
+void set_float_with_comma(lv_obj_t * label, float value, int decimals)
+{
+    char buf[16];
+    lv_snprintf(buf, sizeof(buf), "%.*f", decimals, value);
+    for (char *p = buf; *p; p++) if (*p == '.') *p = ',';
+    lv_label_set_text(label, buf);
+}
 
 void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p)
 {
@@ -34,7 +47,7 @@ void setup()
 {
     Serial.begin(115200);
 
-    temp_Init();
+    //temp_Init();
 
     String LVGL_Arduino = "Hello Arduino! ";
     LVGL_Arduino += String('V') + lv_version_major() + "." + lv_version_minor() + "." + lv_version_patch();
@@ -85,33 +98,17 @@ void setup()
     // Create a button
     lv_obj_t *btn_plus = lv_btn_create(scr);
     lv_obj_align(btn_plus, LV_ALIGN_TOP_RIGHT, 0, 0);
-    lv_obj_set_size(btn_plus, 100, 100);
+    lv_obj_set_size(btn_plus, 200, 60);
 
     lv_obj_t *btn_plus_label = lv_label_create(btn_plus);
     lv_label_set_text(btn_plus_label, "+");
 
     lv_obj_t *btn_minus = lv_btn_create(scr);
     lv_obj_align(btn_minus, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
-    lv_obj_set_size(btn_minus, 100, 100);
+    lv_obj_set_size(btn_minus, 200, 60);
 
     lv_obj_t *btn_minus_label = lv_label_create(btn_minus);
     lv_label_set_text(btn_minus_label, "-");
-
-    // Add event to button
-    lv_obj_add_event_cb(btn_plus, [](lv_event_t *e) {
-        lv_event_code_t code = lv_event_get_code(e);
-        if (code == LV_EVENT_CLICKED) {
-            Serial.println("Increase temperature");
-        }
-    }, LV_EVENT_ALL, NULL);
-
-    // Add event to button
-    lv_obj_add_event_cb(btn_minus, [](lv_event_t *e) {
-        lv_event_code_t code = lv_event_get_code(e);
-        if (code == LV_EVENT_CLICKED) {
-            Serial.println("Decrease temperature");
-        }
-    }, LV_EVENT_ALL, NULL);    
 
     // Create a gauge (meter)
     meter = lv_meter_create(scr);
@@ -120,27 +117,101 @@ void setup()
 
     // Add scale
     lv_meter_scale_t *scale = lv_meter_add_scale(meter);
-    lv_meter_set_scale_ticks(meter, scale, 21, 2, 10, lv_palette_main(LV_PALETTE_GREY));
-    lv_meter_set_scale_major_ticks(meter, scale, 5, 4, 15, lv_color_black(), 10);
+    lv_meter_set_scale_ticks(meter, scale, 41, 2, 5, lv_color_black());
+    lv_meter_set_scale_major_ticks(meter, scale, 10, 4, 20, lv_color_black(), -100); // -100 means, that numbers are out of screen
+    lv_meter_set_scale_range(meter, scale, 180, 220, 270, 135);
+
+    // Add scale just for numbers
+    lv_meter_scale_t *scale_ = lv_meter_add_scale(meter);
+    lv_meter_set_scale_ticks(meter, scale_, 41, 0, 0, lv_color_black()); // 0, 0 - invisible
+    lv_meter_set_scale_major_ticks(meter, scale_, 10, 0, 0, lv_color_black(), 30); // invisible ticks, but numbers visible
+    lv_meter_set_scale_range(meter, scale_, 18, 22, 270, 135);
+
+    // Add outline
+    lv_meter_indicator_t * outline;
+    outline = lv_meter_add_arc(meter, scale, 2, lv_color_black(), 2);
+    lv_meter_set_indicator_start_value(meter, outline, 18);
+    lv_meter_set_indicator_end_value(meter, outline, 22);
+
+    // Add hysteresis
+    hysteresis = lv_meter_add_arc(meter, scale, 8, lv_color_make(0, 255, 0), 10);
+    lv_meter_set_indicator_start_value(meter, hysteresis, (TemperatureRoomTarget - (TemperatureHysteresis / 2)) * 10);
+    lv_meter_set_indicator_end_value(meter, hysteresis, (TemperatureRoomTarget + (TemperatureHysteresis / 2)) * 10);
 
     // Add needle
-    indic = lv_meter_add_needle_line(meter, scale, 4, lv_palette_main(LV_PALETTE_RED), -10);
-    
-    // Set an initial value
-    lv_meter_set_indicator_value(meter, indic, 50);
+    indic = lv_meter_add_needle_line(meter, scale, 8, lv_palette_main(LV_PALETTE_RED), -10);
+    lv_meter_set_indicator_value(meter, indic, 210);
+
+    // Overwrite middle of meter
+    lv_obj_t *inner_circle = lv_obj_create(scr);
+    lv_obj_set_size(inner_circle, 130, 130);
+    lv_obj_remove_style_all(inner_circle);
+    lv_obj_align(inner_circle, LV_ALIGN_LEFT_MID, 120 - 130 / 2, 0);
+    lv_obj_set_style_bg_color(inner_circle, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(inner_circle, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(inner_circle, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(inner_circle, 2, 0);
+    lv_obj_set_style_border_color(inner_circle, lv_color_black(), 0);
+
+    temperature_big = lv_label_create(inner_circle);  // Child of circle
+    lv_label_set_text(temperature_big, "22,5");                    // Initial value
+    lv_obj_set_style_text_font(temperature_big, &lv_font_montserrat_48, 0);  // Big font
+    lv_obj_set_style_text_color(temperature_big, lv_color_black(), 0);
+    lv_obj_center(temperature_big);    
+
+    lv_obj_t * temperature_unit = lv_label_create(inner_circle);
+    lv_label_set_text(temperature_unit, "°C");
+    lv_obj_remove_style_all(temperature_unit);  // <-- THIS IS THE KEY!
+
+    // Now re-apply only what you want
+    lv_obj_set_style_text_font(temperature_unit, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_color(temperature_unit, lv_color_black(), 0);
+
+    // Optional: keep it clickable? No → disable
+    lv_obj_clear_flag(temperature_unit, LV_OBJ_FLAG_CLICKABLE);
+
+    // Position
+    lv_obj_align(temperature_unit, LV_ALIGN_CENTER, 0, 40);
+
+      // Add event to button
+    lv_obj_add_event_cb(btn_plus, [&hysteresis, &meter](lv_event_t *e) {
+        lv_event_code_t code = lv_event_get_code(e);
+        if (code == LV_EVENT_CLICKED)
+        {
+            Serial.println("Increase temperature");
+            TemperatureRoomTarget += 0.1;
+            lv_meter_set_indicator_start_value(meter, hysteresis, (TemperatureRoomTarget - (TemperatureHysteresis / 2)) * 10);
+            lv_meter_set_indicator_end_value(meter, hysteresis, (TemperatureRoomTarget + (TemperatureHysteresis / 2)) * 10);
+        }
+    }, LV_EVENT_ALL, NULL);
+
+    // Add event to button
+    lv_obj_add_event_cb(btn_minus, [&hysteresis, &meter](lv_event_t *e) {
+        lv_event_code_t code = lv_event_get_code(e);
+        if (code == LV_EVENT_CLICKED)
+        {
+            Serial.println("Decrease temperature");
+            TemperatureRoomTarget -= 0.1;
+            lv_meter_set_indicator_start_value(meter, hysteresis, (TemperatureRoomTarget - (TemperatureHysteresis / 2)) * 10);
+            lv_meter_set_indicator_end_value(meter, hysteresis, (TemperatureRoomTarget + (TemperatureHysteresis / 2)) * 10);
+        }
+    }, LV_EVENT_ALL, NULL);    
 
 }
 
 void loop_100ms()
 {
-  int value = 0;
-  value = temp_GetTemperature(0);
-  lv_meter_set_indicator_value(meter, indic, value);   
+  //int value = 0;
+  //value = temp_GetTemperature(0);
+  //lv_meter_set_indicator_value(meter, indic, value);   
 }
 
 void loop_1s()
 {
-  
+  TemperatureRoom += 0.1;
+  if(TemperatureRoom > 22.0) TemperatureRoom = 18.0;
+  lv_meter_set_indicator_value(meter, indic, TemperatureRoom * 10);
+  set_float_with_comma(temperature_big, TemperatureRoom, 1);
 }
 
 void loop_8s() {
