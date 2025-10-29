@@ -162,8 +162,11 @@ SequenceState out_ControlRelays()
 
 void AdjustLCDBrightness()
 {
-    int raw = analogRead(PHOTORESISTOR_PIN);  // Read raw ADC
-    ledcWrite(PWM_CHANNEL, (255 - (raw/16)) / 4);
- 
-    Serial.printf("Raw: %d\n", raw);
+    uint8_t MaxBrightness = 128u;
+
+    int adc = analogRead(PHOTORESISTOR_PIN);  // Read raw ADC
+    if(adc > 1500) adc = 1500;
+    uint16_t pwm = MaxBrightness - (adc * (MaxBrightness-1L)) / 1500;  
+    ledcWrite(PWM_CHANNEL, (pwm > MaxBrightness) ? MaxBrightness : (pwm == 0) ? 1 : (uint8_t)pwm); 
+    //Serial.printf("ADC: %d   PWM: %d\n", adc, pwm);
 }
