@@ -1,7 +1,8 @@
 // src/main.cpp
 #include <Arduino.h>
 #include <lvgl.h>
-#include "gui.h"
+#include "gui/gui.h"
+#include "output.h"
 
 /* ----- Thermostat state (kept here) -------------------------------------- */
 float TemperatureRoom        = 18.0f;
@@ -18,6 +19,8 @@ void setup()
 
     gui_init();
 
+    out_Init();
+
     Serial.println("Setup done");
 }
 
@@ -28,11 +31,12 @@ void loop_1s()
 {
     /* simulate sensor */
     TemperatureRoom += 0.1f;
-    if (TemperatureRoom > 22.0f) TemperatureRoom = 18.0f;
+    if (TemperatureRoom > 25.0f) TemperatureRoom = 18.0f;
 
     gui_update_temperature(TemperatureRoom,
                            TemperatureRoomTarget,
                            TemperatureHysteresis);
+    AdjustLCDBrightness();
 }
 
 void loop_8s() { /* long-term tasks */ }

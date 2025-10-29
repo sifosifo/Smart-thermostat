@@ -7,6 +7,10 @@
 #define WORK_RELAY_ON digitalWrite(WORK_RELAY_PIN, HIGH)
 #define WORK_RELAY_OFF digitalWrite(WORK_RELAY_PIN, LOW)
 
+#define PWM_CHANNEL   0     // LEDC channel (0-15)
+#define PWM_FREQ      5000  // 5kHz (good for LED)
+#define PWM_RESOLUTION 8    // 8-bit: 0–255
+
 SequenceState sequenceState = IDLE;
 uint8_t u8_Time = 0;
 // State of relays (0 = off, 1 = on)
@@ -16,10 +20,19 @@ bool OutputState = false;
 
 void out_Init(void)
 {
-    pinMode(SAFETY_RELAY_PIN, OUTPUT);
+ /*   pinMode(SAFETY_RELAY_PIN, OUTPUT);
     SAFETY_RELAY_OFF;
     pinMode(WORK_RELAY_PIN, OUTPUT);
     WORK_RELAY_OFF;
+   */ 
+    analogReadResolution(12);  // 12-bit (0-4095)
+
+    // Setup PWM for backlight
+    ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
+    ledcAttachPin(LCD_BL_PIN, PWM_CHANNEL);
+
+    // Optional: Start at 50% brightness
+    ledcWrite(PWM_CHANNEL, 128);
 }
 
 void out_EnterDeadState()
@@ -145,4 +158,12 @@ SequenceState out_ControlRelays()
             break;
     }
     return(sequenceState);
+}
+
+void AdjustLCDBrightness()
+{
+    int raw = analogRead(PHOTORESISTOR_PIN);  // Read raw ADC
+    ledcWrite(PWM_CHANNEL, (255 - (raw/16)) / 4);
+ 
+    Serial.printf("Raw: %d\n", raw);
 }
