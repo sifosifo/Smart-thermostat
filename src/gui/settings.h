@@ -14,3 +14,4 @@ float   settings_hysteresis(void);
 uint8_t settings_max_brightness(void);
 bool settings_auto_brightness(void);
 bool settings_require_ac_sense(void);
+bool settings_swap_sensors(void);
