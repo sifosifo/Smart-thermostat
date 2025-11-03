@@ -19,6 +19,8 @@ enum SequenceState {
     DEAD  // Error state
 };
 
+extern bool ACsenseEnabled;
+
 void out_Init(void);
 void out_TurnOnHeatingElement(void);
 void out_TurnOffHeatingElement(void);
