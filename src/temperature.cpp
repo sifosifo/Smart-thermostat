@@ -11,68 +11,93 @@ DallasTemperature sensors(&oneWire);
 // arrays to hold device address
 DeviceAddress SensorAddress[TEMP_SENSOR_COUNT];
 
+#define TEMP_HISTORY_LEN 16
+
+// Circular buffers for smoothing
+float tempHistory[TEMP_SENSOR_COUNT][TEMP_HISTORY_LEN];
+uint8_t tempIndex[TEMP_SENSOR_COUNT] = {0};
+bool tempFilled[TEMP_SENSOR_COUNT] = {false};
+
+
 uint8_t u8_temp_count = 0;
 
 uint8_t u8_ErrorCode[TEMP_SENSOR_COUNT] = {0, 0};
 
-// function to print the temperature for a device
-void printTemperature(DeviceAddress deviceAddress)
+void printAddress(DeviceAddress deviceAddress)
 {
-  // method 1 - slower
-  //Serial.print("Temp C: ");
-  //Serial.print(sensors.getTempC(deviceAddress));
-  //Serial.print(" Temp F: ");
-  //Serial.print(sensors.getTempF(deviceAddress)); // Makes a second call to getTempC and then converts to Fahrenheit
-
-  // method 2 - faster
-  float tempC = sensors.getTempC(deviceAddress);
-  if (tempC == DEVICE_DISCONNECTED_C)
+  for (uint8_t i = 0; i < 8; i++)
   {
-    Serial.println("Error: Could not read temperature data");
-    return;
-  }else
-  {
-//    fT1 = tempC;
+    if (deviceAddress[i] < 16) Serial.print("0");
+    Serial.print(deviceAddress[i], HEX);
   }
-  Serial.print("Temp C: ");
-  Serial.print(tempC);
-  Serial.print("\n");
 }
 
 uint8_t temp_Init(void)
 {
-    pinMode(ONE_WIRE_BUS1, INPUT_PULLUP);
-    while(u8_temp_count == 0)
-  {
-    // locate devices on the bus
-    Serial.print("Locating devices...");
-    sensors.begin();
-    Serial.print("Found ");
-    u8_temp_count = sensors.getDeviceCount();
-    Serial.print(u8_temp_count, DEC);
-    Serial.println(" devices.");
-    delay(100);
-  }
-  if (!sensors.getAddress(SensorAddress[TEMP_SENSOR_FLOOR], TEMP_SENSOR_FLOOR)) Serial.println("Unable to find address for Device 0");
-  if (!sensors.getAddress(SensorAddress[TEMP_SENSOR_ROOM], TEMP_SENSOR_ROOM)) Serial.println("Unable to find address for Device 1");
+  pinMode(ONE_WIRE_BUS1, INPUT_PULLUP);
+  sensors.begin();
 
-    // set the resolution to 9 bit (Each Dallas/Maxim device is capable of several different resolutions)
-  sensors.setResolution(SensorAddress[TEMP_SENSOR_FLOOR], 9);
-  sensors.setResolution(SensorAddress[TEMP_SENSOR_ROOM], 9);
-  
-  return(u8_temp_count);
+  Serial.println("Locating devices...");
+  u8_temp_count = sensors.getDeviceCount();
+  Serial.printf("Found %d devices.\n", u8_temp_count);
+
+  if (u8_temp_count == 0)
+  {
+    Serial.println("❌ No OneWire devices found!");
+    return 0;
+  }
+
+  // Try to get addresses for all expected sensors
+  for (uint8_t i = 0; i < TEMP_SENSOR_COUNT; i++)
+  {
+    if (sensors.getAddress(SensorAddress[i], i))
+    {
+      Serial.printf("Sensor %d address: ", i);
+      printAddress(SensorAddress[i]);
+      Serial.println();
+    }
+    else
+    {
+      Serial.printf("⚠️ Unable to find address for sensor %d\n", i);
+      u8_ErrorCode[i] = 1;
+    }
+
+    // Set resolution to 9 bits for faster reads (can use 12 for higher accuracy)
+    sensors.setResolution(SensorAddress[i], 9);
+  }
+
+  return u8_temp_count;
 }
 
 float temp_GetTemperature(uint8_t u8_sensor)
 {
-  // call sensors.requestTemperatures() to issue a global temperature
-  // request to all devices on the bus
-//  Serial.print("Requesting temperatures...");
-  sensors.requestTemperatures(); // Send the command to get temperatures
-//  Serial.println("DONE");
+  if (u8_sensor >= TEMP_SENSOR_COUNT)
+    return NAN;
 
-  // It responds almost immediately. Let's print out the data
- // printTemperature(SensorAddress[u8_sensor]); // Use a simple function to print out the data
+  sensors.requestTemperatures();
 
-  return(sensors.getTempC(SensorAddress[u8_sensor]));
+  float temp = sensors.getTempC(SensorAddress[u8_sensor]);
+  if (temp == DEVICE_DISCONNECTED_C)
+  {
+    Serial.printf("Sensor %d disconnected!\n", u8_sensor);
+    u8_ErrorCode[u8_sensor] = 1;
+    return NAN;
+  }
+
+  // Store reading in circular buffer
+  tempHistory[u8_sensor][tempIndex[u8_sensor]] = temp;
+  tempIndex[u8_sensor] = (tempIndex[u8_sensor] + 1) % TEMP_HISTORY_LEN;
+  if (tempIndex[u8_sensor] == 0)
+    tempFilled[u8_sensor] = true;
+
+  // Compute average
+  uint8_t count = tempFilled[u8_sensor] ? TEMP_HISTORY_LEN : tempIndex[u8_sensor];
+  float sum = 0;
+  for (uint8_t i = 0; i < count; i++)
+    sum += tempHistory[u8_sensor][i];
+
+  float avg = sum / count;
+  u8_ErrorCode[u8_sensor] = 0;
+
+  return avg;
 }

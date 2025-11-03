@@ -1,11 +1,16 @@
 #include "output.h"
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include "gui/settings.h"
 
 #define SAFETY_RELAY_ON digitalWrite(SAFETY_RELAY_PIN, HIGH)
 #define SAFETY_RELAY_OFF digitalWrite(SAFETY_RELAY_PIN, LOW)
 #define WORK_RELAY_ON digitalWrite(WORK_RELAY_PIN, HIGH)
 #define WORK_RELAY_OFF digitalWrite(WORK_RELAY_PIN, LOW)
+
+#define PWM_CHANNEL   0     // LEDC channel (0-15)
+#define PWM_FREQ      5000  // 5kHz (good for LED)
+#define PWM_RESOLUTION 8    // 8-bit: 0–255
 
 SequenceState sequenceState = IDLE;
 uint8_t u8_Time = 0;
@@ -13,6 +18,7 @@ uint8_t u8_Time = 0;
 bool safetyRelayState = false;
 bool workRelayState = false;
 bool OutputState = false;
+bool ACsenseEnabled = false;
 
 void out_Init(void)
 {
@@ -20,6 +26,15 @@ void out_Init(void)
     SAFETY_RELAY_OFF;
     pinMode(WORK_RELAY_PIN, OUTPUT);
     WORK_RELAY_OFF;
+   
+    analogReadResolution(12);  // 12-bit (0-4095)
+
+    // Setup PWM for backlight
+    ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
+    ledcAttachPin(LCD_BL_PIN, PWM_CHANNEL);
+
+    // Optional: Start at 50% brightness
+    ledcWrite(PWM_CHANNEL, 128);
 }
 
 void out_EnterDeadState()
@@ -58,13 +73,24 @@ void out_TurnOffHeatingElement()
     }
 }
 
+bool out_get_saf_relay()
+{
+    return(safetyRelayState);
+}
+
+bool out_get_work_relay()
+{
+    return(workRelayState);
+}
+
 bool out_Get()
 {
     return(safetyRelayState & workRelayState);
 }
 
 SequenceState out_ControlRelays()
-{      
+{
+    ACsenseEnabled = settings_require_ac_sense();
     switch (sequenceState)
     {
         case IDLE:
@@ -84,12 +110,16 @@ SequenceState out_ControlRelays()
                 workRelayState = true;
                 sequenceState = VERIFY_ON;
             } else {
-                // If the output is already on before turning on the work relay, something went wrong
-                /////////////////////////////////////////////////////////////////////////////// no measurement
-                //out_EnterDeadState();  // Enter dead state
-                WORK_RELAY_ON;  // Turn on work relay if output is still off
-                workRelayState = true;
-                sequenceState = VERIFY_ON;
+                // If the output is already on before turning on the work relay, something went wrong                
+                if(ACsenseEnabled)
+                {
+                    out_EnterDeadState();  // Enter dead state
+                }else
+                {
+                    WORK_RELAY_ON;  // Turn on work relay if output is still off
+                    workRelayState = true;
+                    sequenceState = VERIFY_ON;
+                }
             }
             break;
 
@@ -99,9 +129,13 @@ SequenceState out_ControlRelays()
                 sequenceState = IDLE;
             } else {
                 // If the output is not on, something failed
-                /////////////////////////////////////////////////////////////////////////////// no measurement
-                //out_EnterDeadState();  // Enter dead state
-                sequenceState = IDLE;
+                if(ACsenseEnabled)
+                {
+                    out_EnterDeadState();  // Enter dead state
+                }else
+                {
+                    sequenceState = IDLE;
+                }
             }
             break;
 
@@ -119,11 +153,15 @@ SequenceState out_ControlRelays()
                 sequenceState = VERIFY_OFF;
             } else {
                 // If the output is still on before turning off the safety relay, failure detected
-                /////////////////////////////////////////////////////////////////////////////// no measurement
-                //out_EnterDeadState();  // Enter dead state
-                SAFETY_RELAY_OFF;  // Turn off safety relay if output is still off
-                safetyRelayState = false;
-                sequenceState = VERIFY_OFF;
+                if(ACsenseEnabled)
+                {
+                    out_EnterDeadState();  // Enter dead state
+                }else
+                {
+                    SAFETY_RELAY_OFF;  // Turn off safety relay if output is still off
+                    safetyRelayState = false;
+                    sequenceState = VERIFY_OFF;
+                }
             }
             break;
 
@@ -133,9 +171,13 @@ SequenceState out_ControlRelays()
                 sequenceState = IDLE;
             } else {
                 // If the output is not off, something failed
-                /////////////////////////////////////////////////////////////////////////////// no measurement
-                //out_EnterDeadState();  // Enter dead state
-                sequenceState = IDLE;
+                if(ACsenseEnabled)
+                {
+                    out_EnterDeadState();  // Enter dead state
+                }else
+                {
+                    sequenceState = IDLE;
+                }
             }
             break;
 
@@ -145,4 +187,26 @@ SequenceState out_ControlRelays()
             break;
     }
     return(sequenceState);
+}
+
+void AdjustLCDBrightness()
+{
+    uint16_t pwm = 255;
+    uint8_t MaxBrightness = 128u;
+
+    MaxBrightness = settings_max_brightness();
+
+    if(settings_auto_brightness())
+    {
+        int adc = analogRead(PHOTORESISTOR_PIN);  // Read raw ADC
+        if(adc > 1500) adc = 1500;
+        pwm = MaxBrightness - (adc * (MaxBrightness-1L)) / 1500;  
+        
+        //Serial.printf("ADC: %d   PWM: %d\n", adc, pwm);
+    }else
+    {
+        pwm = MaxBrightness;
+    }
+
+    ledcWrite(PWM_CHANNEL, (pwm > MaxBrightness) ? MaxBrightness : (pwm == 0) ? 1 : (uint8_t)pwm); 
 }
