@@ -76,15 +76,7 @@ void loop_1s()
     //      tft.fillScreen(TFT_GREEN);
         }
         
-    //   tft.setCursor(0,0,4);
-    //   tft.setTextColor(TFT_WHITE);    
-    //   tft.print ("Izba="); tft.setCursor(120,0,4); tft.print(f_RoomTemperature); tft.print (" C / ");  tft.print(f_RoomTempTarget); tft.print (" C");
-        
-    //   tft.setCursor(0,30,4);
-    //   tft.print ("Podlaha="); tft.setCursor(120,30,4); tft.print(f_FloorTemperature); tft.print (" C / "); tft.print(f_FloorTempTarget); tft.print (" C");
-        
-    //   tft.setCursor(0,60,4);
-    //   tft.print ("Stav="); tft.setCursor(120,60,4);
+    
         if(CurrentSequenceState==DEAD)
         {
     //     tft.print("Chyba");
@@ -101,9 +93,6 @@ void loop_1s()
         {
     //     tft.print("Prepinam");
         }
-
-    //   tft.setCursor(0,90,4);
-    //   tft.print ("Sekvencia="); tft.setCursor(120,90,4);
   
     }else
     {
@@ -127,6 +116,8 @@ void loop_1s()
     f_TempHysteresis = settings_hysteresis();
 
     gui_UpdateIndicators(out_get_saf_relay(), out_get_work_relay(), measureOutput());
+
+    temp_swap_sensors(settings_swap_sensors());
 }
 
 void loop_8s()

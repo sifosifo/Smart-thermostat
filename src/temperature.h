@@ -12,5 +12,6 @@
 
 uint8_t temp_Init(void);
 float temp_GetTemperature(uint8_t u8_sensor);
+bool temp_swap_sensors(bool swap_sensors);
 
 #endif
