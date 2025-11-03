@@ -10,6 +10,7 @@
             "includePath": [
                 "/home/viliam/Documents/backup/PlatformIO/Projects/CYD-thermostat/include",
                 "/home/viliam/Documents/backup/PlatformIO/Projects/CYD-thermostat/src",
+                "/home/viliam/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                 "/home/viliam/Documents/backup/PlatformIO/Projects/CYD-thermostat/.pio/libdeps/esp32doit-devkit-v1/DallasTemperature",
                 "/home/viliam/Documents/backup/PlatformIO/Projects/CYD-thermostat/.pio/libdeps/esp32doit-devkit-v1/OneWire",
                 "/home/viliam/Documents/backup/PlatformIO/Projects/CYD-thermostat/.pio/libdeps/esp32doit-devkit-v1/Adafruit CST8XX Library",
@@ -234,7 +235,6 @@
                 "/home/viliam/.platformio/packages/framework-arduinoespressif32/libraries/I2S/src",
                 "/home/viliam/.platformio/packages/framework-arduinoespressif32/libraries/Insights/src",
                 "/home/viliam/.platformio/packages/framework-arduinoespressif32/libraries/NetBIOS/src",
-                "/home/viliam/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                 "/home/viliam/.platformio/packages/framework-arduinoespressif32/libraries/RainMaker/src",
                 "/home/viliam/.platformio/packages/framework-arduinoespressif32/libraries/SD/src",
                 "/home/viliam/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src",
@@ -253,6 +253,7 @@
                 "path": [
                     "/home/viliam/Documents/backup/PlatformIO/Projects/CYD-thermostat/include",
                     "/home/viliam/Documents/backup/PlatformIO/Projects/CYD-thermostat/src",
+                    "/home/viliam/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                     "/home/viliam/Documents/backup/PlatformIO/Projects/CYD-thermostat/.pio/libdeps/esp32doit-devkit-v1/DallasTemperature",
                     "/home/viliam/Documents/backup/PlatformIO/Projects/CYD-thermostat/.pio/libdeps/esp32doit-devkit-v1/OneWire",
                     "/home/viliam/Documents/backup/PlatformIO/Projects/CYD-thermostat/.pio/libdeps/esp32doit-devkit-v1/Adafruit CST8XX Library",
@@ -477,7 +478,6 @@
                     "/home/viliam/.platformio/packages/framework-arduinoespressif32/libraries/I2S/src",
                     "/home/viliam/.platformio/packages/framework-arduinoespressif32/libraries/Insights/src",
                     "/home/viliam/.platformio/packages/framework-arduinoespressif32/libraries/NetBIOS/src",
-                    "/home/viliam/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                     "/home/viliam/.platformio/packages/framework-arduinoespressif32/libraries/RainMaker/src",
                     "/home/viliam/.platformio/packages/framework-arduinoespressif32/libraries/SD/src",
                     "/home/viliam/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src",
