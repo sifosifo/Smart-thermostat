@@ -25,6 +25,8 @@ void out_Init(void);
 void out_TurnOnHeatingElement(void);
 void out_TurnOffHeatingElement(void);
 bool out_Get(void);
+bool out_get_saf_relay(void);
+bool out_get_work_relay(void);
 SequenceState out_ControlRelays(void);
 void out_EnterDeadState(void);
 bool measureOutput(void);

@@ -5,6 +5,7 @@
 #include <lvgl.h>
 #include "gui/gui.h"
 #include "gui/settings.h"
+#include "gui/meter.h"
 #include "output.h"
 #include "temperature.h"
 
@@ -41,17 +42,12 @@ void loop_100ms()
 
 void loop_1s()
 {
+    CurrentOutState = out_Get(); 
+    f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
+    f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
+
     if(gui_check_if_enabled())
     {
-
-        /* simulate sensor */
-        f_RoomTemperature += 0.1f;
-        if (f_RoomTemperature > 25.0f) f_RoomTemperature = 18.0f;
-
-        CurrentOutState = out_Get();
-        f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
-        f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
-
         if((f_RoomTemperature == TEMP_SENSOR_NOT_CONNECTED) || (f_FloorTemperature == TEMP_SENSOR_NOT_CONNECTED))
         {
             out_EnterDeadState();
@@ -129,6 +125,8 @@ void loop_1s()
     gui_update_temperature(f_RoomTemperature, f_RoomTempTarget, f_TempHysteresis, f_FloorTemperature, f_FloorTempTarget);
 
     f_TempHysteresis = settings_hysteresis();
+
+    gui_UpdateIndicators(out_get_saf_relay(), out_get_work_relay(), measureOutput());
 }
 
 void loop_8s()
@@ -141,7 +139,7 @@ void loop()
 {
     u16_Time = (u16_Time + 1) & 8191;
 
-    lv_tick_inc(10);
+    lv_tick_inc(5);
     lv_timer_handler();
 
     if (u16_Time % 800 == 0) {          // 8 s
@@ -153,5 +151,5 @@ void loop()
         loop_100ms();
     }
 
-    delay(10);
+    delay(5);
 }

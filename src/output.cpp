@@ -73,6 +73,16 @@ void out_TurnOffHeatingElement()
     }
 }
 
+bool out_get_saf_relay()
+{
+    return(safetyRelayState);
+}
+
+bool out_get_work_relay()
+{
+    return(workRelayState);
+}
+
 bool out_Get()
 {
     return(safetyRelayState & workRelayState);
