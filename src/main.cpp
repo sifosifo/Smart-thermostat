@@ -19,16 +19,17 @@ SequenceState CurrentSequenceState = IDLE;
 bool CurrentOutState = false;
 uint16_t u16_Time = 0;
 
+void handleHeatingLogic(bool two_sensors_required);
+
 /* ------------------------------------------------------------------------ */
 void setup()
 {
+    out_Init();     // As soon as possible to minimize time when relay driving outputs are not driven
     Serial.begin(115200);
     Serial.println("Init LVGL");
     lv_init();
     Serial.println("Init GUI");
     gui_init();
-    Serial.println("Init IO");
-    out_Init();
     Serial.println("Init temperature sensors");
     temp_Init();
     Serial.println("Setup done");
@@ -40,27 +41,26 @@ void loop_100ms()
     AdjustLCDBrightness();
 }
 
-void loop_1s()
+void loop_2s()
 {
-    CurrentOutState = out_Get(); 
+    uint8_t sensor_count = 0;
+    uint8_t sensor_count_expected = 0;
+    bool two_sensors_required = false;
+
+    CurrentOutState = out_Get();
+    
+    sensor_count = temp_Init();
+    
+    sensor_count_expected = two_sensors_required ? 2 : 1;
+    
     f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
     f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
 
+    two_sensors_required = settings_require_two_sensors();
+
     if(gui_check_if_enabled())
     {
-        if((f_RoomTemperature == TEMP_SENSOR_NOT_CONNECTED) || (f_FloorTemperature == TEMP_SENSOR_NOT_CONNECTED))
-        {
-            out_EnterDeadState();
-        }else
-        {
-        if((f_RoomTemperature < f_RoomTempTarget) && (f_FloorTemperature < f_FloorTempTarget))
-        {
-            out_TurnOnHeatingElement();
-        }else if((f_RoomTemperature > (f_RoomTempTarget + f_TempHysteresis)) || (f_FloorTemperature > f_FloorTempTarget))
-        {
-            out_TurnOffHeatingElement();
-        }
-        }
+        handleHeatingLogic(two_sensors_required);
 
         if(CurrentSequenceState == DEAD)
         {
@@ -118,9 +118,11 @@ void loop_1s()
     gui_UpdateIndicators(out_get_saf_relay(), out_get_work_relay(), measureOutput());
 
     temp_swap_sensors(settings_swap_sensors());
+
+    gui_UpdateSensorsCount(sensor_count, two_sensors_required);
 }
 
-void loop_8s()
+void loop_4s()
 {
     CurrentSequenceState = out_ControlRelays(); 
 }
@@ -128,19 +130,49 @@ void loop_8s()
 /* ------------------------------------------------------------------------ */
 void loop()
 {
-    u16_Time = (u16_Time + 1) & 8191;
+    u16_Time = (u16_Time + 1) & 511;
 
-    lv_tick_inc(5);
+    lv_tick_inc(10);
     lv_timer_handler();
 
-    if (u16_Time % 800 == 0) {          // 8 s
-        loop_8s();
+    if (u16_Time % 400 == 0) {          // 4 s
+        loop_4s();
         u16_Time = 0;
-    } else if (u16_Time % 100 == 0) {   // 1 s
-        loop_1s();
+    } else if (u16_Time % 200 == 0) {   // 2 s
+        loop_2s();
     } else if (u16_Time % 10 == 0) {    // 100 ms
         loop_100ms();
     }
 
-    delay(5);
+    delay(10);
+}
+
+void handleHeatingLogic(bool two_sensors_required)
+{
+    bool sensors_ok = false;
+
+    if (two_sensors_required) {
+        sensors_ok = (f_RoomTemperature != TEMP_SENSOR_NOT_CONNECTED) &&
+                     (f_FloorTemperature != TEMP_SENSOR_NOT_CONNECTED);
+    } else {
+        sensors_ok = (f_RoomTemperature != TEMP_SENSOR_NOT_CONNECTED);
+    }
+
+    if (!sensors_ok) {
+        out_EnterDeadState();
+        return;
+    }
+
+    if (two_sensors_required) {
+        if ((f_RoomTemperature < f_RoomTempTarget) && (f_FloorTemperature < f_FloorTempTarget))
+            out_TurnOnHeatingElement();
+        else if ((f_RoomTemperature > (f_RoomTempTarget + f_TempHysteresis)) ||
+                 (f_FloorTemperature > f_FloorTempTarget))
+            out_TurnOffHeatingElement();
+    } else {
+        if (f_RoomTemperature < f_RoomTempTarget)
+            out_TurnOnHeatingElement();
+        else if (f_RoomTemperature > (f_RoomTempTarget + f_TempHysteresis))
+            out_TurnOffHeatingElement();
+    }
 }

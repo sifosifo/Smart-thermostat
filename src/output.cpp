@@ -26,6 +26,10 @@ void out_Init(void)
     SAFETY_RELAY_OFF;
     pinMode(WORK_RELAY_PIN, OUTPUT);
     WORK_RELAY_OFF;
+    pinMode(AC_SENSE_PIN, INPUT);
+    gpio_pulldown_dis((gpio_num_t)AC_SENSE_PIN);
+    gpio_pullup_dis((gpio_num_t)AC_SENSE_PIN);
+
    
     analogReadResolution(12);  // 12-bit (0-4095)
 
@@ -47,12 +51,23 @@ void out_EnterDeadState()
     Serial.println("ERROR: Failure detected, entering DEAD state.");
 }
 
-// Function to measure the output (stub - implement based on your sensor)
+// Returns inverted value of input, because we want it to be true, when AC voltage is present.
+// AC voltage activated 100 times a second optocoupler, which connects 100 times a second
+// ground to C1.
+// If no AC is present, C1 is charged to 3,3V using resistor R3
+// NO AC => 3,3V => false
+// AC => 0V => true
 bool measureOutput()
 {
-    // Read the sensor pin or measure the actual output state here
-    // return true if the heating element is on, false if off
-    return digitalRead(AC_SENSE_PIN);
+    if(!digitalRead(AC_SENSE_PIN))
+    {
+        //Serial.println("ACsense true");
+        return(true);
+    }else
+    {
+        //Serial.println("ACsense false");
+        return(false);
+    }
 }
 
 // Function to trigger the ON sequence

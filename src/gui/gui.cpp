@@ -30,6 +30,7 @@ Preferences prefs;
 lv_obj_t *scr_main;
 static lv_obj_t *scr_settings;
 static lv_obj_t *checkbox_timeout;
+lv_obj_t *Tcount_l;
 
 /* ----- Long-press detection for the top button (+1.0) ----- */
 static uint32_t longpress_btn_id = LV_BTNMATRIX_BTN_NONE;
@@ -124,6 +125,13 @@ void gui_init()
     lv_obj_align(version, LV_ALIGN_TOP_LEFT, 0, 30);
     lv_label_set_text(version, "v0.4");
 
+    // Detected temperature sensors / required temperature sensors
+    Tcount_l = lv_label_create(scr_main);
+    lv_obj_set_style_text_font(Tcount_l, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(Tcount_l, lv_color_black(), 0);
+    lv_obj_align(Tcount_l, LV_ALIGN_TOP_LEFT, 0, 45);
+    lv_label_set_text(Tcount_l, "-/-");
+
  // === 4 VERTICAL BUTTONS — 1 COLUMN, 4 ROWS ===
 #define SPACES "             "
 
@@ -183,6 +191,14 @@ void gui_update_temperature(float current, float target, float hyst, float Tempe
 
     set_float_with_comma(temperature_big, current, 1);
     set_float_with_comma(temperature_target, target, 1);
+}
+
+void gui_UpdateSensorsCount(uint8_t count, bool two_sensors_required)
+{
+    char buf[8];
+
+    lv_snprintf(buf, sizeof(buf), "%d/%d", count, two_sensors_required ? 2 : 1);
+    lv_label_set_text(Tcount_l, buf);
 }
 
 /* ------------------------------------------------------------------------ */
