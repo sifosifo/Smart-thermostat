@@ -1,6 +1,8 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include "temperature.h"
+#include "gui/settings.h"
+#include "output.h"
 
 OneWire oneWire(ONE_WIRE_BUS1);
 DallasTemperature sensors(&oneWire);
@@ -11,37 +13,14 @@ bool temp_swap_sensors_b = false;
 uint8_t u8_temp_count = 0;
 uint8_t u8_ErrorCode[TEMP_SENSOR_COUNT] = {0, 0};
 
-// --- helper to print addresses ---
-void printAddress(const DeviceAddress deviceAddress)
-{
-    for (uint8_t i = 0; i < 8; i++)
-    {
-        if (deviceAddress[i] < 16) Serial.print("0");
-        Serial.print(deviceAddress[i], HEX);
-    }
-}
+float f_RoomTemperature = 0.0;
+float f_FloorTemperature = 0.0;
+float f_TempHysteresis = 2.0;
+float f_TempTarget[TEMP_SENSOR_COUNT] = {19, 25};
 
-// --- helper to compare addresses ---
-static int compareAddress(const DeviceAddress a, const DeviceAddress b)
-{
-    for (uint8_t i = 0; i < 8; i++)
-    {
-        if (a[i] < b[i]) return -1;
-        if (a[i] > b[i]) return 1;
-    }
-    return 0;
-}
-
-// --- helper to swap addresses ---
-static void swapAddress(DeviceAddress a, DeviceAddress b)
-{
-    for (uint8_t i = 0; i < 8; i++)
-    {
-        uint8_t tmp = a[i];
-        a[i] = b[i];
-        b[i] = tmp;
-    }
-}
+void printAddress(const DeviceAddress deviceAddress);
+static int compareAddress(const DeviceAddress a, const DeviceAddress b);
+static void swapAddress(DeviceAddress a, DeviceAddress b);
 
 uint8_t temp_Init(void)
 {
@@ -101,6 +80,46 @@ uint8_t temp_Init(void)
     return u8_temp_count;
 }
 
+uint8_t temp_Process(bool two_sensors_required)
+{
+    bool sensors_ok = false;
+
+    f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
+    f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
+
+    if (two_sensors_required)
+    {
+        sensors_ok = (f_RoomTemperature != TEMP_SENSOR_NOT_CONNECTED) &&
+                     (f_FloorTemperature != TEMP_SENSOR_NOT_CONNECTED);
+    } else
+    {
+        sensors_ok = (f_RoomTemperature != TEMP_SENSOR_NOT_CONNECTED);
+    }
+
+    if (!sensors_ok)
+    {
+        out_EnterDeadState();
+        u8_temp_count = temp_Init();
+        return(u8_temp_count);
+    }
+
+    if (two_sensors_required)
+    {
+        if ((f_RoomTemperature < f_TempTarget[TEMP_SENSOR_ROOM]) && (f_FloorTemperature < f_TempTarget[TEMP_SENSOR_FLOOR]))
+            out_TurnOnHeatingElement();
+        else if ((f_RoomTemperature > (f_TempTarget[TEMP_SENSOR_ROOM] + f_TempHysteresis)) ||
+                 (f_FloorTemperature > f_TempTarget[TEMP_SENSOR_FLOOR]))
+            out_TurnOffHeatingElement();
+    } else
+    {
+        if (f_RoomTemperature < f_TempTarget[TEMP_SENSOR_ROOM])
+            out_TurnOnHeatingElement();
+        else if (f_RoomTemperature > (f_TempTarget[TEMP_SENSOR_ROOM] + f_TempHysteresis))
+            out_TurnOffHeatingElement();
+    }
+    return(u8_temp_count);
+}
+
 // --- get latest temperature ---
 float temp_GetTemperature(uint8_t u8_sensor)
 {
@@ -124,9 +143,51 @@ float temp_GetTemperature(uint8_t u8_sensor)
     return temp;
 }
 
+void temp_SetTemperatureTarget(uint8_t u8_sensor, float f_value)
+{
+    f_TempTarget[u8_sensor] = f_value;
+}
+
+float temp_GetTemperatureTarget(uint8_t u8_sensor)
+{
+    return(f_TempTarget[u8_sensor]);
+}
+
 // --- set swap flag ---
 bool temp_swap_sensors(bool swap_sensors)
 {
     temp_swap_sensors_b = swap_sensors;
     return true;
+}
+
+// --- helper to print addresses ---
+void printAddress(const DeviceAddress deviceAddress)
+{
+    for (uint8_t i = 0; i < 8; i++)
+    {
+        if (deviceAddress[i] < 16) Serial.print("0");
+        Serial.print(deviceAddress[i], HEX);
+    }
+}
+
+// --- helper to compare addresses ---
+static int compareAddress(const DeviceAddress a, const DeviceAddress b)
+{
+    for (uint8_t i = 0; i < 8; i++)
+    {
+        if (a[i] < b[i]) return -1;
+        if (a[i] > b[i]) return 1;
+    }
+    return 0;
+}
+
+// --- helper to swap addresses ---
+static void swapAddress(DeviceAddress a, DeviceAddress b)
+{
+    for (uint8_t i = 0; i < 8; i++)
+    {
+        uint8_t tmp = a[i];
+        a[i] = b[i];
+        b[i] = tmp;
+    }
 }

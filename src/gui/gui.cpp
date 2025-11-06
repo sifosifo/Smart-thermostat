@@ -5,6 +5,7 @@
 #include "gui/meter.h"
 #include "gui/settings.h"
 #include <Preferences.h>
+#include "temperature.h"
 
 static const uint16_t screenWidth  = 320;
 static const uint16_t screenHeight = 240;
@@ -60,8 +61,8 @@ static void my_disp_flush(lv_disp_drv_t *disp,
 }
 
 /* ----- Button events ---------------------------------------------------- */
-static void btn_plus_event(lv_event_t *)  { gui_increase_target(); }
-static void btn_minus_event(lv_event_t *) { gui_decrease_target(); }
+static void btn_plus_event(lv_event_t *)  { temp_increase_target(); }
+static void btn_minus_event(lv_event_t *) { temp_decrease_target(); }
 static void btnmatrix_event_cb(lv_event_t *e);
 
 /* ------------------------------------------------------------------------ */
@@ -202,28 +203,38 @@ void gui_UpdateSensorsCount(uint8_t count, bool two_sensors_required)
 }
 
 /* ------------------------------------------------------------------------ */
-void gui_increase_target()
+void temp_increase_target()
 {
-    extern float f_RoomTempTarget;
-    extern float f_RoomTemperature;
-    extern float f_TempHysteresis;
+    float f_RoomTempTarget;
+    float f_RoomTemperature;
+    float f_TempHysteresis;
+    float f_FloorTemperature;
 
+    f_TempHysteresis = settings_hysteresis();
+    f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
+    f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
+    f_RoomTempTarget = temp_GetTemperatureTarget(TEMP_SENSOR_ROOM);
     f_RoomTempTarget += 0.5f;
-
-    // IMMEDIATE GUI UPDATE
-    gui_update_temperature(f_RoomTemperature, f_RoomTempTarget, f_TempHysteresis, 22, 25);
+    temp_SetTemperatureTarget(TEMP_SENSOR_ROOM, f_RoomTempTarget);
+    Serial.printf("Increase target\n");
+    gui_update_temperature(f_RoomTemperature, f_RoomTempTarget, f_TempHysteresis, f_FloorTemperature, 25);
 }
 
-void gui_decrease_target()
+void temp_decrease_target()
 {
-    extern float f_RoomTempTarget;
-    extern float f_RoomTemperature;
-    extern float f_TempHysteresis;
+    float f_RoomTempTarget;
+    float f_RoomTemperature;
+    float f_TempHysteresis;
+    float f_FloorTemperature;
 
+    f_TempHysteresis = settings_hysteresis();
+    f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
+    f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
+    f_RoomTempTarget = temp_GetTemperatureTarget(TEMP_SENSOR_ROOM);
     f_RoomTempTarget -= 0.5f;
-
-    // IMMEDIATE GUI UPDATE
-    gui_update_temperature(f_RoomTemperature, f_RoomTempTarget, f_TempHysteresis, 22, 25);
+    temp_SetTemperatureTarget(TEMP_SENSOR_ROOM, f_RoomTempTarget);
+     Serial.printf("Decrease target\n");
+    gui_update_temperature(f_RoomTemperature, f_RoomTempTarget, f_TempHysteresis, f_FloorTemperature, 25);
 }
 
 static void btn_back_event(lv_event_t *e)
@@ -248,8 +259,8 @@ static void btnmatrix_event_cb(lv_event_t *e)
     /* ---- Short press ---- */
     switch (id) {
         case 0: goto_settings_cb(); break;      // Settings
-        case 1: gui_increase_target(); break;   // + short
-        case 2: gui_decrease_target(); break;   // - short
+        case 1: temp_increase_target(); break;   // + short
+        case 2: temp_decrease_target(); break;   // - short
         case 3: OFF_event_cb(); break;          // ON/OFF
     }
 }

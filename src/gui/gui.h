@@ -22,5 +22,5 @@ bool gui_check_if_enabled(void);
 void gui_UpdateSensorsCount(uint8_t count, bool two_sensors_required);
 
 /* ----- Callbacks used by the thermostat logic --------------------------- */
-void gui_increase_target();          // called from main when "+" pressed
-void gui_decrease_target();          // called from main when "-" pressed
+void temp_increase_target();          // called from main when "+" pressed
+void temp_decrease_target();          // called from main when "-" pressed

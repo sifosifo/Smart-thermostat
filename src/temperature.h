@@ -12,7 +12,10 @@
 
 uint8_t temp_Init(void);
 float temp_GetTemperature(uint8_t u8_sensor);
+float temp_GetTemperatureTarget(uint8_t u8_sensor);
+void temp_SetTemperatureTarget(uint8_t u8_sensor, float f_value);
 bool temp_swap_sensors(bool swap_sensors);
 uint8_t temp_GetSensorCount(void);
+uint8_t temp_Process(bool two_sensors_required);
 
 #endif

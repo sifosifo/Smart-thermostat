@@ -9,12 +9,6 @@
 #include "output.h"
 #include "temperature.h"
 
-float f_RoomTemperature = 0.0;
-float f_FloorTemperature = 0.0;
-float f_RoomTempTarget = 19.0;
-float f_FloorTempTarget = 25.0;
-float f_TempHysteresis = 2.0;
-
 SequenceState CurrentSequenceState = IDLE;
 bool CurrentOutState = false;
 uint16_t u16_Time = 0;
@@ -43,57 +37,52 @@ void loop_100ms()
 
 void loop_2s()
 {
-    uint8_t sensor_count = 0;
+    static uint8_t sensor_count = 0;
     uint8_t sensor_count_expected = 0;
     bool two_sensors_required = false;
+    float f_RoomTemperature;
+    float f_FloorTemperature;
+    float f_RoomTempTarget;
+    float f_FloorTempTarget;
+    float f_TempHysteresis; 
 
-    CurrentOutState = out_Get();
-    
-    sensor_count = temp_Init();
-    
+    two_sensors_required = settings_require_two_sensors();
     sensor_count_expected = two_sensors_required ? 2 : 1;
-    
+    f_TempHysteresis = settings_hysteresis();
+    f_RoomTempTarget = temp_GetTemperatureTarget(TEMP_SENSOR_ROOM);
+    f_FloorTempTarget = temp_GetTemperatureTarget(TEMP_SENSOR_FLOOR);
     f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
     f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
 
-    two_sensors_required = settings_require_two_sensors();
-
     if(gui_check_if_enabled())
     {
-        handleHeatingLogic(two_sensors_required);
-
+        sensor_count = temp_Process(two_sensors_required);
+        CurrentOutState = out_Get();
+        
         if(CurrentSequenceState == DEAD)
         {
-    //      tft.fillScreen(TFT_RED);
-        }else if(CurrentSequenceState != IDLE)
+          // red
+        }else
         {
-    //      tft.fillScreen(TFT_BLUE);
-        }else if (CurrentOutState == false)
-        {
-    //      tft.fillScreen(TFT_BLACK);
-        }else if(CurrentOutState == true)
-        {
-    //      tft.fillScreen(TFT_GREEN);
-        }
-        
+            //grey or normal
+        }                
     
         if(CurrentSequenceState==DEAD)
         {
-    //     tft.print("Chyba");
+            Serial.printf("Chyba\n");
         }else if(CurrentSequenceState==IDLE)
         {
         if (CurrentOutState==false)
-        {    
-    //       tft.print("Vypnute");
+        {
+            Serial.printf("Vypnuté\n");
         }else if(CurrentOutState==true)
-        {    
-    //       tft.print("Zapnute");
+        {   
+            Serial.printf("Zapnuté\n");
         }
         }else    
         {
-    //     tft.print("Prepinam");
-        }
-  
+            Serial.printf("Prepínam\n");
+        }  
     }else
     {
         out_TurnOffHeatingElement();
@@ -108,23 +97,25 @@ void loop_2s()
     if(CurrentSequenceState == TURNING_OFF_WORK) lv_snprintf(buf, sizeof(buf), "TURNING_OFF_WORK");
     if(CurrentSequenceState == TURNING_OFF_SAFETY) lv_snprintf(buf, sizeof(buf), "TURNING_OFF_SAFETY");
     if(CurrentSequenceState == VERIFY_OFF) lv_snprintf(buf, sizeof(buf), "VERIFY_OFF");
-    if(CurrentSequenceState == DEAD) lv_snprintf(buf, sizeof(buf), "DEAD");  
-    
+    if(CurrentSequenceState == DEAD) lv_snprintf(buf, sizeof(buf), "DEAD");
+
+    // Update label with state machine
     gui_update_state(buf);
+    // Update meter by temperatures
     gui_update_temperature(f_RoomTemperature, f_RoomTempTarget, f_TempHysteresis, f_FloorTemperature, f_FloorTempTarget);
-
-    f_TempHysteresis = settings_hysteresis();
-
-    gui_UpdateIndicators(out_get_saf_relay(), out_get_work_relay(), measureOutput());
-
+    // Update relay indicators
+    gui_UpdateIndicators(out_get_saf_relay(), out_get_work_relay(), measureOutput());    
+    // If sensors need to be swapped, do so.
     temp_swap_sensors(settings_swap_sensors());
-
+    // Update sensor count label
     gui_UpdateSensorsCount(sensor_count, two_sensors_required);
+    // Update state machine
+    CurrentSequenceState = out_ControlRelays();
 }
 
 void loop_4s()
 {
-    CurrentSequenceState = out_ControlRelays(); 
+     
 }
 
 /* ------------------------------------------------------------------------ */
@@ -145,34 +136,4 @@ void loop()
     }
 
     delay(10);
-}
-
-void handleHeatingLogic(bool two_sensors_required)
-{
-    bool sensors_ok = false;
-
-    if (two_sensors_required) {
-        sensors_ok = (f_RoomTemperature != TEMP_SENSOR_NOT_CONNECTED) &&
-                     (f_FloorTemperature != TEMP_SENSOR_NOT_CONNECTED);
-    } else {
-        sensors_ok = (f_RoomTemperature != TEMP_SENSOR_NOT_CONNECTED);
-    }
-
-    if (!sensors_ok) {
-        out_EnterDeadState();
-        return;
-    }
-
-    if (two_sensors_required) {
-        if ((f_RoomTemperature < f_RoomTempTarget) && (f_FloorTemperature < f_FloorTempTarget))
-            out_TurnOnHeatingElement();
-        else if ((f_RoomTemperature > (f_RoomTempTarget + f_TempHysteresis)) ||
-                 (f_FloorTemperature > f_FloorTempTarget))
-            out_TurnOffHeatingElement();
-    } else {
-        if (f_RoomTemperature < f_RoomTempTarget)
-            out_TurnOnHeatingElement();
-        else if (f_RoomTemperature > (f_RoomTempTarget + f_TempHysteresis))
-            out_TurnOffHeatingElement();
-    }
 }
