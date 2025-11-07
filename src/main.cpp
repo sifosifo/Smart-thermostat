@@ -1,162 +1,139 @@
-// LCD zobrazuje hodnoty z premennych
-// Jeden senzor meria teplotu
-#include <TFT_eSPI.h>    // TFT display library
-//#include <lvgl.h>        // LVGL library
-#include "../.pio/libdeps/esp32doit-devkit-v1/lvgl/examples/lv_examples.h"
-#include "temperature.h"
+// src/main.cpp
+#include <Arduino.h>
+#define LV_CONF_INCLUDE_SIMPLE
+#include "lv_conf.h"
+#include <lvgl.h>
+#include "gui/gui.h"
+#include "gui/settings.h"
+#include "gui/meter.h"
 #include "output.h"
-
-TFT_eSPI tft = TFT_eSPI();  // Create TFT object
-
-#define DRAW_BUF_SIZE (320 * 240 / 10 * (LV_COLOR_DEPTH / 8))
-uint32_t draw_buf[DRAW_BUF_SIZE / 4];
-
-float f_RoomTemperature = 0.5;
-float f_FloorTemperature = 0.5;
-float f_RoomTempTarget = 19.0;
-float f_FloorTempTarget = 25.0;
-float f_TempHysteresis = 0.5;
+#include "temperature.h"
 
 SequenceState CurrentSequenceState = IDLE;
 bool CurrentOutState = false;
 uint16_t u16_Time = 0;
 
-// Tick handler for LVGL
-void lv_tick_handler(void) {
-  lv_tick_inc(5);
-}
+void handleHeatingLogic(bool two_sensors_required);
 
+/* ------------------------------------------------------------------------ */
 void setup()
 {
-  out_Init();
-  // start serial port
-  Serial.begin(115200);
-
-  tft.init();
-  tft.setRotation(1);
-  tft.fillScreen(TFT_BLACK);
-  tft.setCursor(0,0,4);
-  tft.setTextColor(TFT_WHITE);
-  tft.println ("v0.2");  
-
-  temp_Init();
-  //tft.println ("1");  
+    out_Init();     // As soon as possible to minimize time when relay driving outputs are not driven
+    Serial.begin(115200);
+    Serial.println("Init LVGL");
+    lv_init();
+    Serial.println("Init GUI");
+    gui_init();
+    Serial.println("Init temperature sensors");
+    temp_Init();
+    Serial.println("Setup done");
 }
 
-void loop_100ms(void)
+/* ------------------------------------------------------------------------ */
+void loop_100ms()
 {
-  
+    AdjustLCDBrightness();
 }
 
-void loop_1s(void)
+void loop_2s()
 {
-    CurrentOutState = out_Get();
+    static uint8_t sensor_count = 0;
+    uint8_t sensor_count_expected = 0;
+    bool two_sensors_required = false;
+    float f_RoomTemperature;
+    float f_FloorTemperature;
+    float f_RoomTempTarget;
+    float f_FloorTempTarget;
+    float f_TempHysteresis; 
+
+    two_sensors_required = settings_require_two_sensors();
+    sensor_count_expected = two_sensors_required ? 2 : 1;
+    f_TempHysteresis = settings_hysteresis();
+    f_RoomTempTarget = temp_GetTemperatureTarget(TEMP_SENSOR_ROOM);
+    f_FloorTempTarget = temp_GetTemperatureTarget(TEMP_SENSOR_FLOOR);
     f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
     f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
 
-    if((f_RoomTemperature == TEMP_SENSOR_NOT_CONNECTED) || (f_FloorTemperature == TEMP_SENSOR_NOT_CONNECTED))
+    if(gui_check_if_enabled())
     {
-        out_EnterDeadState();
+        sensor_count = temp_Process(two_sensors_required);
+        CurrentOutState = out_Get();
+        
+        if(CurrentSequenceState == DEAD)
+        {
+          // red
+        }else
+        {
+            //grey or normal
+        }                
+    
+        if(CurrentSequenceState==DEAD)
+        {
+            Serial.printf("Chyba\n");
+        }else if(CurrentSequenceState==IDLE)
+        {
+        if (CurrentOutState==false)
+        {
+            Serial.printf("Vypnuté\n");
+        }else if(CurrentOutState==true)
+        {   
+            Serial.printf("Zapnuté\n");
+        }
+        }else    
+        {
+            Serial.printf("Prepínam\n");
+        }  
     }else
     {
-      if((f_RoomTemperature < f_RoomTempTarget) && (f_FloorTemperature < f_FloorTempTarget))
-      {
-        out_TurnOnHeatingElement();
-      }else if((f_RoomTemperature > (f_RoomTempTarget + f_TempHysteresis)) || (f_FloorTemperature > f_FloorTempTarget))
-      {
         out_TurnOffHeatingElement();
-      }
+        CurrentSequenceState = IDLE;
     }
 
-    if(CurrentSequenceState == DEAD)
-    {
-      tft.fillScreen(TFT_RED);
-    }else if(CurrentSequenceState != IDLE)
-    {
-      tft.fillScreen(TFT_BLUE);
-    }else if (CurrentOutState == false)
-    {
-      tft.fillScreen(TFT_BLACK);
-    }else if(CurrentOutState == true)
-    {
-      tft.fillScreen(TFT_GREEN);
-    }
-    
-    tft.setCursor(0,0,4);
-    tft.setTextColor(TFT_WHITE);    
-    tft.print ("Izba="); tft.setCursor(120,0,4); tft.print(f_RoomTemperature); tft.print (" C / ");  tft.print(f_RoomTempTarget); tft.print (" C");
-    
-    tft.setCursor(0,30,4);
-    tft.print ("Podlaha="); tft.setCursor(120,30,4); tft.print(f_FloorTemperature); tft.print (" C / "); tft.print(f_FloorTempTarget); tft.print (" C");
-    
-    tft.setCursor(0,60,4);
-    tft.print ("Stav="); tft.setCursor(120,60,4);
-    if(CurrentSequenceState==DEAD)
-    {
-      tft.print("Chyba");
-    }else if(CurrentSequenceState==IDLE)
-    {
-      if (CurrentOutState==false)
-      {    
-        tft.print("Vypnute");
-      }else if(CurrentOutState==true)
-      {    
-        tft.print("Zapnute");
-      }
-    }else    
-    {
-      tft.print("Prepinam");
-    }
+    char buf[16];
+    if(CurrentSequenceState == IDLE) lv_snprintf(buf, sizeof(buf), "IDLE");
+    if(CurrentSequenceState == TURNING_ON_SAFETY) lv_snprintf(buf, sizeof(buf), "TURNING_ON_SAFETY");
+    if(CurrentSequenceState == TURNING_ON_WORK) lv_snprintf(buf, sizeof(buf), "TURNING_ON_WORK");
+    if(CurrentSequenceState == VERIFY_ON) lv_snprintf(buf, sizeof(buf), "VERIFY_ON");
+    if(CurrentSequenceState == TURNING_OFF_WORK) lv_snprintf(buf, sizeof(buf), "TURNING_OFF_WORK");
+    if(CurrentSequenceState == TURNING_OFF_SAFETY) lv_snprintf(buf, sizeof(buf), "TURNING_OFF_SAFETY");
+    if(CurrentSequenceState == VERIFY_OFF) lv_snprintf(buf, sizeof(buf), "VERIFY_OFF");
+    if(CurrentSequenceState == DEAD) lv_snprintf(buf, sizeof(buf), "DEAD");
 
-    tft.setCursor(0,90,4);
-    tft.print ("Sekvencia="); tft.setCursor(120,90,4);
-    if(CurrentSequenceState == IDLE) tft.print("IDLE");
-    if(CurrentSequenceState == TURNING_ON_SAFETY) tft.print("TURNING_ON_SAFETY");
-    if(CurrentSequenceState == TURNING_ON_WORK) tft.print("TURNING_ON_WORK");
-    if(CurrentSequenceState == VERIFY_ON) tft.print("VERIFY_ON");
-    if(CurrentSequenceState == TURNING_OFF_WORK) tft.print("TURNING_OFF_WORK");
-    if(CurrentSequenceState == TURNING_OFF_SAFETY) tft.print("TURNING_OFF_SAFETY");
-    if(CurrentSequenceState == VERIFY_OFF) tft.print("VERIFY_OFF");
-    if(CurrentSequenceState == DEAD) tft.print("DEAD");    
-
-//    delay(1000);            // Give the processor some time
-//    digitalWrite(17, HIGH); // sets the digital pin 13 on
-//    delay(1000);            // waits for a second
-//    digitalWrite(17, LOW);  // sets the digital pin 13 off  
+    // Update label with state machine
+    gui_update_state(buf);
+    // Update meter by temperatures
+    gui_update_temperature(f_RoomTemperature, f_RoomTempTarget, f_TempHysteresis, f_FloorTemperature, f_FloorTempTarget);
+    // Update relay indicators
+    gui_UpdateIndicators(out_get_saf_relay(), out_get_work_relay(), measureOutput());    
+    // If sensors need to be swapped, do so.
+    temp_swap_sensors(settings_swap_sensors());
+    // Update sensor count label
+    gui_UpdateSensorsCount(sensor_count, two_sensors_required);
+    // Update state machine
+    CurrentSequenceState = out_ControlRelays();
 }
 
-void loop_8s(void)
+void loop_4s()
 {
-  CurrentSequenceState = out_ControlRelays();  
+     
 }
 
+/* ------------------------------------------------------------------------ */
 void loop()
 {
-  u16_Time++;
-  //u16_Time = u16_Time & ((2^13)-1);
-  u16_Time = u16_Time & 8191;
+    u16_Time = (u16_Time + 1) & 511;
 
-  if((u16_Time % 8000) == 0)   // 8s
-  {
-    //Serial.println("88");
-    loop_8s();
-    u16_Time = 0;
-  }else
+    lv_tick_inc(10);
+    lv_timer_handler();
 
-  if((u16_Time % 1000) == 0)   // 1s
-  {
-    loop_1s();
-    //Serial.println("11");
-    /*digitalWrite(OUT_1, LOW);            
-    digitalWrite(OUT_2, LOW);
-    delay(1000);
-    digitalWrite(OUT_1, HIGH);            
-    digitalWrite(OUT_2, HIGH);*/
-  }else
+    if (u16_Time % 400 == 0) {          // 4 s
+        loop_4s();
+        u16_Time = 0;
+    } else if (u16_Time % 200 == 0) {   // 2 s
+        loop_2s();
+    } else if (u16_Time % 10 == 0) {    // 100 ms
+        loop_100ms();
+    }
 
-  if((u16_Time % 100) == 0)    // 100ms
-  {
-    loop_100ms();
-  }
-  delay(1);
+    delay(10);
 }
