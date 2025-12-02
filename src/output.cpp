@@ -9,7 +9,7 @@
 #define WORK_RELAY_OFF digitalWrite(WORK_RELAY_PIN, LOW)
 
 #define PWM_CHANNEL   0     // LEDC channel (0-15)
-#define PWM_FREQ      5000  // 5kHz (good for LED)
+#define PWM_FREQ      1000  // 5kHz (good for LED)
 #define PWM_RESOLUTION 8    // 8-bit: 0–255
 
 SequenceState sequenceState = IDLE;
@@ -32,13 +32,16 @@ void out_Init(void)
 
    
     analogReadResolution(12);  // 12-bit (0-4095)
+}
 
-    // Setup PWM for backlight
+void out_BL_init(void)
+{
+       // Setup PWM for backlight
     ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
     ledcAttachPin(LCD_BL_PIN, PWM_CHANNEL);
 
-    // Optional: Start at 50% brightness
-    ledcWrite(PWM_CHANNEL, 128);
+    ledcWrite(PWM_CHANNEL, 255);
+    ledcWrite(PWM_CHANNEL, 0);
 }
 
 void out_EnterDeadState()
@@ -217,7 +220,7 @@ void AdjustLCDBrightness()
         if(adc > 1500) adc = 1500;
         pwm = MaxBrightness - (adc * (MaxBrightness-1L)) / 1500;  
         
-        //Serial.printf("ADC: %d   PWM: %d\n", adc, pwm);
+        Serial.printf("ADC: %d   PWM: %d\n", adc, pwm);
     }else
     {
         pwm = MaxBrightness;

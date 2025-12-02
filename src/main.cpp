@@ -27,6 +27,7 @@ void setup()
     Serial.println("Init temperature sensors");
     temp_Init();
     Serial.println("Setup done");
+    out_BL_init();  // graphics library is initializing BL pin, so we need to reinitialize it after
 }
 
 /* ------------------------------------------------------------------------ */

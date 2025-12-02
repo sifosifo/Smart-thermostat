@@ -213,7 +213,9 @@
 #define TFT_CS   15  // Chip select control pin
 #define TFT_DC   2  // Data Command control pin
 #define TFT_RST  -1  // Reset pin (could connect to Arduino RESET pin)
-#define TFT_BL   27  // LED back-light
+//#define TFT_BL   27  // LED back-light
+#define TFT_BL   -1  // Will be handled in app
+
 
 #define TOUCH_CS 33     // Chip select pin (T_CS) of touch screen
 

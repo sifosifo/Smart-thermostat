@@ -22,6 +22,7 @@ enum SequenceState {
 extern bool ACsenseEnabled;
 
 void out_Init(void);
+void out_BL_init(void);
 void out_TurnOnHeatingElement(void);
 void out_TurnOffHeatingElement(void);
 bool out_Get(void);
