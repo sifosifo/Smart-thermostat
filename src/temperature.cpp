@@ -15,7 +15,6 @@ uint8_t u8_ErrorCode[TEMP_SENSOR_COUNT] = {0, 0};
 
 float f_RoomTemperature = 0.0;
 float f_FloorTemperature = 0.0;
-float f_TempHysteresis = 2.0;
 float f_TempTarget[TEMP_SENSOR_COUNT] = {19, 25};
 
 void printAddress(const DeviceAddress deviceAddress);
@@ -83,9 +82,11 @@ uint8_t temp_Init(void)
 uint8_t temp_Process(bool two_sensors_required)
 {
     bool sensors_ok = false;
+    bool enable_heater = false;
 
     f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
     f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
+    float f_TempHysteresis = settings_hysteresis();
 
     if (two_sensors_required)
     {
@@ -95,7 +96,7 @@ uint8_t temp_Process(bool two_sensors_required)
     {
         sensors_ok = (f_RoomTemperature != TEMP_SENSOR_NOT_CONNECTED);
     }
-
+    //Serial.printf("F:%f R:%f T:%f\n", f_FloorTemperature, f_RoomTemperature, f_TempHysteresis);
     if (!sensors_ok)
     {
         out_EnterDeadState();
@@ -103,20 +104,17 @@ uint8_t temp_Process(bool two_sensors_required)
         return(u8_temp_count);
     }
 
-    if (two_sensors_required)
-    {
-        if ((f_RoomTemperature < f_TempTarget[TEMP_SENSOR_ROOM]) && (f_FloorTemperature < f_TempTarget[TEMP_SENSOR_FLOOR]))
-            out_TurnOnHeatingElement();
-        else if ((f_RoomTemperature > (f_TempTarget[TEMP_SENSOR_ROOM] + f_TempHysteresis)) ||
-                 (f_FloorTemperature > f_TempTarget[TEMP_SENSOR_FLOOR]))
-            out_TurnOffHeatingElement();
-    } else
-    {
-        if (f_RoomTemperature < f_TempTarget[TEMP_SENSOR_ROOM])
-            out_TurnOnHeatingElement();
-        else if (f_RoomTemperature > (f_TempTarget[TEMP_SENSOR_ROOM] + f_TempHysteresis))
-            out_TurnOffHeatingElement();
+    if (two_sensors_required && (f_FloorTemperature > f_TempTarget[TEMP_SENSOR_FLOOR]))
+    {   // floor temperature too high, turn off heating
+        out_TurnOffHeatingElement();
+        return(u8_temp_count);
     }
+    
+    if (f_RoomTemperature < (f_TempTarget[TEMP_SENSOR_ROOM] - f_TempHysteresis / 2))
+        out_TurnOnHeatingElement();
+    else if (f_RoomTemperature > (f_TempTarget[TEMP_SENSOR_ROOM] + f_TempHysteresis / 2))
+        out_TurnOffHeatingElement();
+    
     return(u8_temp_count);
 }
 

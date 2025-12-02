@@ -124,7 +124,7 @@ void gui_init()
     lv_obj_set_style_text_font(version, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(version, lv_color_black(), 0);
     lv_obj_align(version, LV_ALIGN_TOP_LEFT, 0, 30);
-    lv_label_set_text(version, "v0.51");
+    lv_label_set_text(version, "v0.52");
 
     // Detected temperature sensors / required temperature sensors
     Tcount_l = lv_label_create(scr_main);

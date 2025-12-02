@@ -29,7 +29,6 @@ void out_Init(void)
     pinMode(AC_SENSE_PIN, INPUT);
     gpio_pulldown_dis((gpio_num_t)AC_SENSE_PIN);
     gpio_pullup_dis((gpio_num_t)AC_SENSE_PIN);
-
    
     analogReadResolution(12);  // 12-bit (0-4095)
 }
@@ -220,7 +219,7 @@ void AdjustLCDBrightness()
         if(adc > 1500) adc = 1500;
         pwm = MaxBrightness - (adc * (MaxBrightness-1L)) / 1500;  
         
-        Serial.printf("ADC: %d   PWM: %d\n", adc, pwm);
+        //Serial.printf("ADC: %d   PWM: %d\n", adc, pwm);
     }else
     {
         pwm = MaxBrightness;
