@@ -15,6 +15,9 @@ uint8_t u8_ErrorCode[TEMP_SENSOR_COUNT] = {0, 0};
 
 float f_RoomTemperature = 0.0;
 float f_FloorTemperature = 0.0;
+static float cached_room_temperature = TEMP_SENSOR_NOT_CONNECTED;
+static float cached_floor_temperature = TEMP_SENSOR_NOT_CONNECTED;
+static bool temperature_read_pending = false;
 float f_TempTarget[TEMP_SENSOR_COUNT] = {19, 25};
 
 void printAddress(const DeviceAddress deviceAddress);
@@ -32,6 +35,7 @@ uint8_t temp_Init(void)
     pinMode(ONE_WIRE_BUS1, INPUT_PULLUP);
     oneWire.reset();
     sensors.begin();                     // <-- this triggers a fresh search
+    sensors.setWaitForConversion(false); // Conversion runs while the main loop handles LVGL.
 
     u8_temp_count = sensors.getDeviceCount();
 
@@ -79,13 +83,13 @@ uint8_t temp_Init(void)
     return u8_temp_count;
 }
 
-uint8_t temp_Process(bool two_sensors_required)
+uint8_t temp_Process(bool two_sensors_required, float room_temperature, float floor_temperature)
 {
     bool sensors_ok = false;
     bool enable_heater = false;
 
-    f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
-    f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
+    f_RoomTemperature = room_temperature;
+    f_FloorTemperature = floor_temperature;
     float f_TempHysteresis = settings_hysteresis();
 
     if (two_sensors_required)
@@ -118,27 +122,51 @@ uint8_t temp_Process(bool two_sensors_required)
     return(u8_temp_count);
 }
 
-// --- get latest temperature ---
-float temp_GetTemperature(uint8_t u8_sensor)
+void temp_StartTemperatureRead(void)
 {
-    if (u8_sensor >= TEMP_SENSOR_COUNT) return NAN;
+    if (temperature_read_pending) return;
 
-    // Apply swap flag
-    if (temp_swap_sensors_b)
-        u8_sensor ^= 1;  // 0↔1 toggle
-
+    // Start one conversion for both devices without waiting for it to finish.
     sensors.requestTemperatures();
+    temperature_read_pending = true;
+}
 
-    float temp = sensors.getTempC(SensorAddress[u8_sensor]);
-    if (temp == DEVICE_DISCONNECTED_C)
-    {
-        Serial.printf("Sensor %d disconnected!\n", u8_sensor);
-        u8_ErrorCode[u8_sensor] = 1;
-        return NAN;
+bool temp_CompleteTemperatureRead(void)
+{
+    if (!temperature_read_pending || !sensors.isConversionComplete()) return false;
+
+    const uint8_t room_sensor = temp_swap_sensors_b ? TEMP_SENSOR_FLOOR : TEMP_SENSOR_ROOM;
+    const uint8_t floor_sensor = temp_swap_sensors_b ? TEMP_SENSOR_ROOM : TEMP_SENSOR_FLOOR;
+
+    float room = sensors.getTempC(SensorAddress[room_sensor]);
+    if (room == DEVICE_DISCONNECTED_C) {
+        Serial.printf("Sensor %d disconnected!\n", room_sensor);
+        u8_ErrorCode[room_sensor] = 1;
+        room = TEMP_SENSOR_NOT_CONNECTED;
+    } else {
+        u8_ErrorCode[room_sensor] = 0;
     }
 
-    u8_ErrorCode[u8_sensor] = 0;
-    return temp;
+    float floor = sensors.getTempC(SensorAddress[floor_sensor]);
+    if (floor == DEVICE_DISCONNECTED_C) {
+        Serial.printf("Sensor %d disconnected!\n", floor_sensor);
+        u8_ErrorCode[floor_sensor] = 1;
+        floor = TEMP_SENSOR_NOT_CONNECTED;
+    } else {
+        u8_ErrorCode[floor_sensor] = 0;
+    }
+
+    cached_room_temperature = room;
+    cached_floor_temperature = floor;
+    temperature_read_pending = false;
+    return true;
+}
+
+float temp_GetCachedTemperature(uint8_t u8_sensor)
+{
+    if (u8_sensor == TEMP_SENSOR_ROOM) return cached_room_temperature;
+    if (u8_sensor == TEMP_SENSOR_FLOOR) return cached_floor_temperature;
+    return NAN;
 }
 
 void temp_SetTemperatureTarget(uint8_t u8_sensor, float f_value)
