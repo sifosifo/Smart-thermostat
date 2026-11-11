@@ -101,7 +101,8 @@ void loop_2s()
     if(CurrentSequenceState == TURNING_OFF_WORK) lv_snprintf(buf, sizeof(buf), "TURNING_OFF_WORK");
     if(CurrentSequenceState == TURNING_OFF_SAFETY) lv_snprintf(buf, sizeof(buf), "TURNING_OFF_SAFETY");
     if(CurrentSequenceState == VERIFY_OFF) lv_snprintf(buf, sizeof(buf), "VERIFY_OFF");
-    if(CurrentSequenceState == DEAD) lv_snprintf(buf, sizeof(buf), "DEAD");
+    if(CurrentSequenceState == DEAD)
+        lv_snprintf(buf, sizeof(buf), "DEAD %s", out_GetFaultCodeText());
 
     // Update label with state machine
     gui_update_state(buf);
@@ -139,6 +140,8 @@ void loop()
     } else if (u16_Time % 10 == 0) {    // 100 ms
         loop_100ms();
     }
+
+    if (temp_CheckTemperatureFreshness()) loop_2s_pending = true;
 
     if (loop_2s_pending && temp_CompleteTemperatureRead()) {
         loop_2s_pending = false;

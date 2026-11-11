@@ -13,6 +13,7 @@
 uint8_t temp_Init(void);
 void temp_StartTemperatureRead(void);
 bool temp_CompleteTemperatureRead(void);
+bool temp_CheckTemperatureFreshness(void);
 float temp_GetCachedTemperature(uint8_t u8_sensor);
 float temp_GetTemperatureTarget(uint8_t u8_sensor);
 void temp_SetTemperatureTarget(uint8_t u8_sensor, float f_value);
