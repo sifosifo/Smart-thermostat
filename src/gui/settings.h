@@ -5,6 +5,8 @@
 extern bool thermostat_enabled;          // from gui.cpp
 extern Preferences prefs;                // already declared in gui.cpp
 
+static const char *KEY_TARGET_TEMPERATURE = "target_temp";
+
 /* ----- Public API ------------------------------------------------------- */
 void settings_screen_create(lv_obj_t *parent);   // call from gui_init()
 void settings_screen_save_and_exit();           // called from Back button
