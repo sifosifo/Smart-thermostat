@@ -56,6 +56,8 @@ void settings_screen_create(lv_obj_t *)
     scr_settings = lv_obj_create(NULL);   // ← NULL = create a screen
     lv_obj_set_style_bg_color(scr_settings, lv_color_hex(0xF0F0F0), 0);
 
+    lv_obj_set_style_pad_bottom(scr_settings, 20, 0);   // Add bottom padding
+
     /* ----- Title ----- */
     lv_obj_t *title = lv_label_create(scr_settings);
     lv_label_set_text(title, "Nastavenia");

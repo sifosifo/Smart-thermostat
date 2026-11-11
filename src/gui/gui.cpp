@@ -24,6 +24,7 @@ bool display_timeout_enabled = true;
 bool thermostat_enabled = true;
 
 Preferences prefs;
+uint8_t counter_s = 255;
 
 // ---------------------------------------------------------------------
 // Screens
@@ -79,6 +80,11 @@ void gui_init()
     delay(10);
     digitalWrite(27, HIGH);
 
+    prefs.begin("gui", true);  // Read-only mode.
+    uint8_t mvm_target = prefs.getInt(KEY_TARGET_TEMPERATURE, 0);  // Load from NVM
+    prefs.end();
+    temp_SetTemperatureTarget(TEMP_SENSOR_ROOM, 15 + ((float)mvm_target / 10.0f));
+
     /* ---- LVGL buffers ---- */
     buf1 = (lv_color_t *)heap_caps_malloc(
         sizeof(lv_color_t) * screenWidth * 100,
@@ -124,7 +130,7 @@ void gui_init()
     lv_obj_set_style_text_font(version, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(version, lv_color_black(), 0);
     lv_obj_align(version, LV_ALIGN_TOP_LEFT, 0, 30);
-    lv_label_set_text(version, "v0.4");
+    lv_label_set_text(version, "v0.53");
 
     // Detected temperature sensors / required temperature sensors
     Tcount_l = lv_label_create(scr_main);
@@ -182,6 +188,22 @@ void gui_update_state(char *buf)
 /* ------------------------------------------------------------------------ */
 void gui_update_temperature(float current, float target, float hyst, float TemperatureFloor, float TemperatureFloorTarget)
 {
+    if(counter_s != 255)
+    {
+        counter_s += 2;
+        if(counter_s >= 60)
+        {
+            counter_s = 255;
+
+            // Save target temperature to NVM
+            prefs.begin("gui", false);  // Read-write mode.
+            uint8_t mvm_target = (uint8_t)((temp_GetTemperatureTarget(TEMP_SENSOR_ROOM) - 15.0f) * 10.0f);
+            prefs.putInt(KEY_TARGET_TEMPERATURE, mvm_target);
+            prefs.end();
+            Serial.printf("Saved target temperature: %d\n", mvm_target);
+        }
+    } 
+
     lv_meter_set_indicator_value(meter, indic, current * 10);
     lv_meter_set_indicator_value(meter, indic2, TemperatureFloor * 10);
 
@@ -210,6 +232,7 @@ void temp_increase_target()
     float f_TempHysteresis;
     float f_FloorTemperature;
 
+    counter_s = 0;  // start timer countdown for saving
     f_TempHysteresis = settings_hysteresis();
     f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
     f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
@@ -227,6 +250,7 @@ void temp_decrease_target()
     float f_TempHysteresis;
     float f_FloorTemperature;
 
+    counter_s = 0;  // start timer countdown for saving
     f_TempHysteresis = settings_hysteresis();
     f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
     f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
