@@ -12,6 +12,7 @@
 SequenceState CurrentSequenceState = IDLE;
 bool CurrentOutState = false;
 uint16_t u16_Time = 0;
+static bool loop_2s_pending = false;
 
 void handleHeatingLogic(bool two_sensors_required);
 
@@ -50,14 +51,16 @@ void loop_2s()
     two_sensors_required = settings_require_two_sensors();
     sensor_count_expected = two_sensors_required ? 2 : 1;
     f_TempHysteresis = settings_hysteresis();
+
     f_RoomTempTarget = temp_GetTemperatureTarget(TEMP_SENSOR_ROOM);
     f_FloorTempTarget = temp_GetTemperatureTarget(TEMP_SENSOR_FLOOR);
-    f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
-    f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
+    f_RoomTemperature = temp_GetCachedTemperature(TEMP_SENSOR_ROOM);
+    f_FloorTemperature = temp_GetCachedTemperature(TEMP_SENSOR_FLOOR);
 
     if(gui_check_if_enabled())
     {
-        sensor_count = temp_Process(two_sensors_required);
+        sensor_count = temp_Process(two_sensors_required, f_RoomTemperature, f_FloorTemperature);
+
         CurrentOutState = out_Get();
         
         if(CurrentSequenceState == DEAD)
@@ -98,7 +101,8 @@ void loop_2s()
     if(CurrentSequenceState == TURNING_OFF_WORK) lv_snprintf(buf, sizeof(buf), "TURNING_OFF_WORK");
     if(CurrentSequenceState == TURNING_OFF_SAFETY) lv_snprintf(buf, sizeof(buf), "TURNING_OFF_SAFETY");
     if(CurrentSequenceState == VERIFY_OFF) lv_snprintf(buf, sizeof(buf), "VERIFY_OFF");
-    if(CurrentSequenceState == DEAD) lv_snprintf(buf, sizeof(buf), "DEAD");
+    if(CurrentSequenceState == DEAD)
+        lv_snprintf(buf, sizeof(buf), "DEAD %s", out_GetFaultCodeText());
 
     // Update label with state machine
     gui_update_state(buf);
@@ -131,9 +135,17 @@ void loop()
         loop_4s();
         u16_Time = 0;
     } else if (u16_Time % 200 == 0) {   // 2 s
-        loop_2s();
+        temp_StartTemperatureRead();
+        loop_2s_pending = true;
     } else if (u16_Time % 10 == 0) {    // 100 ms
         loop_100ms();
+    }
+
+    if (temp_CheckTemperatureFreshness()) loop_2s_pending = true;
+
+    if (loop_2s_pending && temp_CompleteTemperatureRead()) {
+        loop_2s_pending = false;
+        loop_2s();
     }
 
     delay(10);

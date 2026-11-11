@@ -34,8 +34,8 @@ public:
 private:
     int8_t _sda, _scl, _rst, _int;
 
-    uint8_t i2c_read(uint8_t addr);
-    uint8_t i2c_read_continuous(uint8_t addr, uint8_t *data, uint32_t length);
+    bool i2c_read(uint8_t addr, uint8_t *value);
+    bool i2c_read_continuous(uint8_t addr, uint8_t *data, uint32_t length);
     void i2c_write(uint8_t addr, uint8_t data);
     uint8_t i2c_write_continuous(uint8_t addr, const uint8_t *data, uint32_t length);
 };

@@ -1,5 +1,6 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <math.h>
 #include "temperature.h"
 #include "gui/settings.h"
 #include "output.h"
@@ -15,15 +16,59 @@ uint8_t u8_ErrorCode[TEMP_SENSOR_COUNT] = {0, 0};
 
 float f_RoomTemperature = 0.0;
 float f_FloorTemperature = 0.0;
+static float cached_room_temperature = TEMP_SENSOR_NOT_CONNECTED;
+static float cached_floor_temperature = TEMP_SENSOR_NOT_CONNECTED;
+static bool temperature_read_pending = false;
+static bool room_has_valid_reading = false;
+static bool floor_has_valid_reading = false;
+static uint32_t room_last_valid_ms = 0;
+static uint32_t floor_last_valid_ms = 0;
+static uint32_t temperature_monitor_started_ms = 0;
+static bool stale_sensor_fault_reported = false;
+static constexpr uint32_t TEMPERATURE_STALE_TIMEOUT_MS = 10000;
 float f_TempTarget[TEMP_SENSOR_COUNT] = {19, 25};
 
 void printAddress(const DeviceAddress deviceAddress);
 static int compareAddress(const DeviceAddress a, const DeviceAddress b);
 static void swapAddress(DeviceAddress a, DeviceAddress b);
 
+static bool isValidTemperature(float temperature)
+{
+    return isfinite(temperature) && temperature != DEVICE_DISCONNECTED_C &&
+           temperature >= -55.0f && temperature <= 125.0f;
+}
+
+static bool readingIsFresh(bool has_reading, uint32_t last_valid_ms, uint32_t now)
+{
+    return has_reading && now - last_valid_ms < TEMPERATURE_STALE_TIMEOUT_MS;
+}
+
+static bool readingHasExpired(bool has_reading, uint32_t last_valid_ms, uint32_t now)
+{
+    const uint32_t reference_ms = has_reading ? last_valid_ms : temperature_monitor_started_ms;
+    return now - reference_ms >= TEMPERATURE_STALE_TIMEOUT_MS;
+}
+
+static bool requiredReadingsAreFresh(uint32_t now)
+{
+    if (!readingIsFresh(room_has_valid_reading, room_last_valid_ms, now)) return false;
+    if (settings_require_two_sensors() &&
+        !readingIsFresh(floor_has_valid_reading, floor_last_valid_ms, now)) return false;
+    return true;
+}
+
+static bool requiredReadingHasExpired(uint32_t now)
+{
+    if (readingHasExpired(room_has_valid_reading, room_last_valid_ms, now)) return true;
+    if (settings_require_two_sensors() &&
+        readingHasExpired(floor_has_valid_reading, floor_last_valid_ms, now)) return true;
+    return false;
+}
+
 uint8_t temp_Init(void)
 {
     bool verbose = false;
+    temperature_monitor_started_ms = millis();
 
         // 1. Reset everything
     memset(SensorAddress, 0, sizeof(SensorAddress));
@@ -32,6 +77,7 @@ uint8_t temp_Init(void)
     pinMode(ONE_WIRE_BUS1, INPUT_PULLUP);
     oneWire.reset();
     sensors.begin();                     // <-- this triggers a fresh search
+    sensors.setWaitForConversion(false); // Conversion runs while the main loop handles LVGL.
 
     u8_temp_count = sensors.getDeviceCount();
 
@@ -79,28 +125,34 @@ uint8_t temp_Init(void)
     return u8_temp_count;
 }
 
-uint8_t temp_Process(bool two_sensors_required)
+uint8_t temp_Process(bool two_sensors_required, float room_temperature, float floor_temperature)
 {
-    bool sensors_ok = false;
-    bool enable_heater = false;
+    if (stale_sensor_fault_reported) return u8_temp_count;
 
-    f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
-    f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
+    bool sensors_ok = false;
+
+    f_RoomTemperature = room_temperature;
+    f_FloorTemperature = floor_temperature;
     float f_TempHysteresis = settings_hysteresis();
+
+    const bool room_sensor_ok = isValidTemperature(f_RoomTemperature);
+    const bool floor_sensor_ok = isValidTemperature(f_FloorTemperature);
 
     if (two_sensors_required)
     {
-        sensors_ok = (f_RoomTemperature != TEMP_SENSOR_NOT_CONNECTED) &&
-                     (f_FloorTemperature != TEMP_SENSOR_NOT_CONNECTED);
+        sensors_ok = room_sensor_ok && floor_sensor_ok;
     } else
     {
-        sensors_ok = (f_RoomTemperature != TEMP_SENSOR_NOT_CONNECTED);
+        sensors_ok = room_sensor_ok;
     }
     //Serial.printf("F:%f R:%f T:%f\n", f_FloorTemperature, f_RoomTemperature, f_TempHysteresis);
     if (!sensors_ok)
     {
-        out_EnterDeadState();
-        u8_temp_count = temp_Init();
+        stale_sensor_fault_reported = true;
+        const FaultCode fault_code = !room_sensor_ok && two_sensors_required && !floor_sensor_ok ?
+                                     FAULT_T3_BOTH_SENSORS_STALE :
+                                     (!room_sensor_ok ? FAULT_T1_ROOM_STALE : FAULT_T2_FLOOR_STALE);
+        out_RequestSafeShutdown(fault_code);
         return(u8_temp_count);
     }
 
@@ -118,27 +170,93 @@ uint8_t temp_Process(bool two_sensors_required)
     return(u8_temp_count);
 }
 
-// --- get latest temperature ---
-float temp_GetTemperature(uint8_t u8_sensor)
+void temp_StartTemperatureRead(void)
 {
-    if (u8_sensor >= TEMP_SENSOR_COUNT) return NAN;
+    if (temperature_read_pending || stale_sensor_fault_reported) return;
 
-    // Apply swap flag
-    if (temp_swap_sensors_b)
-        u8_sensor ^= 1;  // 0↔1 toggle
-
+    // Start one conversion for both devices without waiting for it to finish.
     sensors.requestTemperatures();
+    temperature_read_pending = true;
+}
 
-    float temp = sensors.getTempC(SensorAddress[u8_sensor]);
-    if (temp == DEVICE_DISCONNECTED_C)
-    {
-        Serial.printf("Sensor %d disconnected!\n", u8_sensor);
-        u8_ErrorCode[u8_sensor] = 1;
-        return NAN;
+bool temp_CompleteTemperatureRead(void)
+{
+    // Keep the 2 s relay state machine running so a latched sensor fault can
+    // complete the normal staged shutdown sequence.
+    if (stale_sensor_fault_reported) return true;
+
+    const uint32_t now = millis();
+    bool conversion_completed = false;
+    if (temperature_read_pending && sensors.isConversionComplete()) {
+        temperature_read_pending = false;
+        conversion_completed = true;
+
+        const uint8_t room_sensor = temp_swap_sensors_b ? TEMP_SENSOR_FLOOR : TEMP_SENSOR_ROOM;
+        const uint8_t floor_sensor = temp_swap_sensors_b ? TEMP_SENSOR_ROOM : TEMP_SENSOR_FLOOR;
+
+        const float room = sensors.getTempC(SensorAddress[room_sensor]);
+        if (isValidTemperature(room)) {
+            cached_room_temperature = room;
+            room_last_valid_ms = now;
+            room_has_valid_reading = true;
+            u8_ErrorCode[room_sensor] = 0;
+        } else {
+            u8_ErrorCode[room_sensor] = 1;
+        }
+
+        const float floor = sensors.getTempC(SensorAddress[floor_sensor]);
+        if (isValidTemperature(floor)) {
+            cached_floor_temperature = floor;
+            floor_last_valid_ms = now;
+            floor_has_valid_reading = true;
+            u8_ErrorCode[floor_sensor] = 0;
+        } else {
+            u8_ErrorCode[floor_sensor] = 1;
+        }
     }
 
-    u8_ErrorCode[u8_sensor] = 0;
-    return temp;
+    if (requiredReadingsAreFresh(now)) return conversion_completed;
+    if (temp_CheckTemperatureFreshness()) return true;
+
+    return false;
+}
+
+bool temp_CheckTemperatureFreshness(void)
+{
+    if (stale_sensor_fault_reported) return false;
+
+    const uint32_t now = millis();
+    if (!requiredReadingHasExpired(now)) return false;
+
+    const bool room_expired = readingHasExpired(room_has_valid_reading, room_last_valid_ms, now);
+    const bool floor_expired = settings_require_two_sensors() &&
+                               readingHasExpired(floor_has_valid_reading, floor_last_valid_ms, now);
+    const FaultCode fault_code = room_expired && floor_expired ? FAULT_T3_BOTH_SENSORS_STALE :
+                                 (room_expired ? FAULT_T1_ROOM_STALE : FAULT_T2_FLOOR_STALE);
+
+    Serial.printf("ERROR %s: no valid temperature update for 10 seconds.\n",
+                  fault_code == FAULT_T1_ROOM_STALE ? "T1" :
+                  fault_code == FAULT_T2_FLOOR_STALE ? "T2" : "T3");
+    if (room_expired)
+        cached_room_temperature = TEMP_SENSOR_NOT_CONNECTED;
+    if (floor_expired)
+        cached_floor_temperature = TEMP_SENSOR_NOT_CONNECTED;
+    stale_sensor_fault_reported = true;
+    temperature_read_pending = false;
+    out_RequestSafeShutdown(fault_code);
+    return true;
+}
+
+float temp_GetCachedTemperature(uint8_t u8_sensor)
+{
+    const uint32_t now = millis();
+    if (u8_sensor == TEMP_SENSOR_ROOM)
+        return readingIsFresh(room_has_valid_reading, room_last_valid_ms, now) ?
+               cached_room_temperature : TEMP_SENSOR_NOT_CONNECTED;
+    if (u8_sensor == TEMP_SENSOR_FLOOR)
+        return readingIsFresh(floor_has_valid_reading, floor_last_valid_ms, now) ?
+               cached_floor_temperature : TEMP_SENSOR_NOT_CONNECTED;
+    return NAN;
 }
 
 void temp_SetTemperatureTarget(uint8_t u8_sensor, float f_value)

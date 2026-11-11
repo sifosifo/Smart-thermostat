@@ -130,7 +130,7 @@ void gui_init()
     lv_obj_set_style_text_font(version, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(version, lv_color_black(), 0);
     lv_obj_align(version, LV_ALIGN_TOP_LEFT, 0, 30);
-    lv_label_set_text(version, "v0.53");
+    lv_label_set_text(version, "v0.6");
 
     // Detected temperature sensors / required temperature sensors
     Tcount_l = lv_label_create(scr_main);
@@ -234,8 +234,8 @@ void temp_increase_target()
 
     counter_s = 0;  // start timer countdown for saving
     f_TempHysteresis = settings_hysteresis();
-    f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
-    f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
+    f_RoomTemperature = temp_GetCachedTemperature(TEMP_SENSOR_ROOM);
+    f_FloorTemperature = temp_GetCachedTemperature(TEMP_SENSOR_FLOOR);
     f_RoomTempTarget = temp_GetTemperatureTarget(TEMP_SENSOR_ROOM);
     f_RoomTempTarget += 0.5f;
     temp_SetTemperatureTarget(TEMP_SENSOR_ROOM, f_RoomTempTarget);
@@ -252,8 +252,8 @@ void temp_decrease_target()
 
     counter_s = 0;  // start timer countdown for saving
     f_TempHysteresis = settings_hysteresis();
-    f_RoomTemperature = temp_GetTemperature(TEMP_SENSOR_ROOM);
-    f_FloorTemperature = temp_GetTemperature(TEMP_SENSOR_FLOOR);
+    f_RoomTemperature = temp_GetCachedTemperature(TEMP_SENSOR_ROOM);
+    f_FloorTemperature = temp_GetCachedTemperature(TEMP_SENSOR_FLOOR);
     f_RoomTempTarget = temp_GetTemperatureTarget(TEMP_SENSOR_ROOM);
     f_RoomTempTarget -= 0.5f;
     temp_SetTemperatureTarget(TEMP_SENSOR_ROOM, f_RoomTempTarget);

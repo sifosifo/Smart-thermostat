@@ -19,6 +19,16 @@ bool safetyRelayState = false;
 bool workRelayState = false;
 bool OutputState = false;
 bool ACsenseEnabled = false;
+static bool sensorFaultShutdownLatched = false;
+static FaultCode activeFaultCode = FAULT_NONE;
+
+static bool isAcSenseFault(FaultCode fault_code)
+{
+    return fault_code == FAULT_A1_OUTPUT_ACTIVE_BEFORE_ON ||
+           fault_code == FAULT_A2_OUTPUT_MISSING_AFTER_ON ||
+           fault_code == FAULT_A3_OUTPUT_ACTIVE_AFTER_WORK_OFF ||
+           fault_code == FAULT_A4_OUTPUT_ACTIVE_AFTER_SHUTDOWN;
+}
 
 void out_Init(void)
 {
@@ -43,14 +53,36 @@ void out_BL_init(void)
     ledcWrite(PWM_CHANNEL, 0);
 }
 
-void out_EnterDeadState()
+const char *out_GetFaultCodeText(void)
 {
+    switch (activeFaultCode)
+    {
+        case FAULT_T1_ROOM_STALE: return "T1";
+        case FAULT_T2_FLOOR_STALE: return "T2";
+        case FAULT_T3_BOTH_SENSORS_STALE: return "T3";
+        case FAULT_A1_OUTPUT_ACTIVE_BEFORE_ON: return "A1";
+        case FAULT_A2_OUTPUT_MISSING_AFTER_ON: return "A2";
+        case FAULT_A3_OUTPUT_ACTIVE_AFTER_WORK_OFF: return "A3";
+        case FAULT_A4_OUTPUT_ACTIVE_AFTER_SHUTDOWN: return "A4";
+        default: return "?";
+    }
+}
+
+void out_EnterDeadState(FaultCode fault_code)
+{
+    // A sense failure during shutdown takes display priority over the original
+    // sensor fault because it means output power may still be present.
+    const bool ac_sense_fault = isAcSenseFault(fault_code);
+    const bool current_fault_is_ac = isAcSenseFault(activeFaultCode);
+    if (activeFaultCode == FAULT_NONE || ac_sense_fault || !current_fault_is_ac)
+        activeFaultCode = fault_code;
+
     SAFETY_RELAY_OFF;
     WORK_RELAY_OFF;
     safetyRelayState = false;
     workRelayState = false;
     sequenceState = DEAD;  // Enter dead state
-    Serial.println("ERROR: Failure detected, entering DEAD state.");
+    Serial.printf("ERROR %s: entering DEAD state.\n", out_GetFaultCodeText());
 }
 
 // Returns inverted value of input, because we want it to be true, when AC voltage is present.
@@ -75,7 +107,7 @@ bool measureOutput()
 // Function to trigger the ON sequence
 void out_TurnOnHeatingElement()
 {
-    if ((sequenceState == IDLE) & (safetyRelayState == false))
+    if (!sensorFaultShutdownLatched && sequenceState == IDLE && !safetyRelayState)
     {
         sequenceState = TURNING_ON_SAFETY;
     }
@@ -84,10 +116,32 @@ void out_TurnOnHeatingElement()
 // Function to trigger the OFF sequence
 void out_TurnOffHeatingElement()
 {
-    if ((sequenceState == IDLE) & (safetyRelayState == true))
+    switch (sequenceState)
     {
-        sequenceState = TURNING_OFF_WORK;
+        case IDLE:
+        case TURNING_ON_SAFETY:
+        case TURNING_ON_WORK:
+        case VERIFY_ON:
+            if (safetyRelayState || workRelayState || sequenceState != IDLE)
+                sequenceState = TURNING_OFF_WORK;
+            break;
+        default:
+            break;
     }
+}
+
+// Latch a sensor fault and shut the relays down in their normal staged order.
+void out_RequestSafeShutdown(FaultCode fault_code)
+{
+    sensorFaultShutdownLatched = true;
+    if (activeFaultCode == FAULT_NONE) activeFaultCode = fault_code;
+    if (sequenceState == DEAD) return;
+
+    if (sequenceState == TURNING_OFF_WORK || sequenceState == TURNING_OFF_SAFETY ||
+        sequenceState == VERIFY_OFF) return;
+
+    if (safetyRelayState || workRelayState) sequenceState = TURNING_OFF_WORK;
+    else sequenceState = VERIFY_OFF;
 }
 
 bool out_get_saf_relay()
@@ -130,7 +184,7 @@ SequenceState out_ControlRelays()
                 // If the output is already on before turning on the work relay, something went wrong                
                 if(ACsenseEnabled)
                 {
-                    out_EnterDeadState();  // Enter dead state
+                    out_EnterDeadState(FAULT_A1_OUTPUT_ACTIVE_BEFORE_ON);  // Output unexpectedly active before enabling work relay.
                 }else
                 {
                     WORK_RELAY_ON;  // Turn on work relay if output is still off
@@ -148,7 +202,7 @@ SequenceState out_ControlRelays()
                 // If the output is not on, something failed
                 if(ACsenseEnabled)
                 {
-                    out_EnterDeadState();  // Enter dead state
+                    out_EnterDeadState(FAULT_A2_OUTPUT_MISSING_AFTER_ON);  // Output did not activate.
                 }else
                 {
                     sequenceState = IDLE;
@@ -172,7 +226,7 @@ SequenceState out_ControlRelays()
                 // If the output is still on before turning off the safety relay, failure detected
                 if(ACsenseEnabled)
                 {
-                    out_EnterDeadState();  // Enter dead state
+                    out_EnterDeadState(FAULT_A3_OUTPUT_ACTIVE_AFTER_WORK_OFF);  // Output remained active after work relay opened.
                 }else
                 {
                     SAFETY_RELAY_OFF;  // Turn off safety relay if output is still off
@@ -185,12 +239,12 @@ SequenceState out_ControlRelays()
         case VERIFY_OFF:
             if (!measureOutput()) {
                 // Heating element is off, done with the OFF sequence
-                sequenceState = IDLE;
+                sequenceState = sensorFaultShutdownLatched ? DEAD : IDLE;
             } else {
                 // If the output is not off, something failed
-                if(ACsenseEnabled)
+                if(ACsenseEnabled || sensorFaultShutdownLatched)
                 {
-                    out_EnterDeadState();  // Enter dead state
+                    out_EnterDeadState(FAULT_A4_OUTPUT_ACTIVE_AFTER_SHUTDOWN);  // Output remained active after shutdown.
                 }else
                 {
                     sequenceState = IDLE;
