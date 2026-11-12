@@ -1,5 +1,6 @@
 #include "gui/settings.h"
 #include "gui.h"
+#include "network.h"
 #include <Arduino.h>
 
 /* --------------------------------------------------------------------- */
@@ -9,6 +10,10 @@ static lv_obj_t *checkbox_req2;
 static lv_obj_t *checkbox_swap;
 static lv_obj_t *checkbox_ac;
 static lv_obj_t *checkbox_auto_bright;
+static lv_obj_t *checkbox_wifi;
+static lv_obj_t *checkbox_web_setup;
+static lv_obj_t *checkbox_ap_password;
+static lv_obj_t *checkbox_allow_unsecure;
 
 static lv_obj_t *slider_max_bright;
 static lv_obj_t *label_max_bright;
@@ -50,6 +55,22 @@ static void slider_event_cb(lv_event_t *e)          // ← keep the argument!
 /* --------------------------------------------------------------------- */
 static void btn_back_event(lv_event_t *) { settings_screen_save_and_exit(); }
 
+static void update_wifi_settings_controls()
+{
+    const bool wifi_enabled = lv_obj_has_state(checkbox_wifi, LV_STATE_CHECKED);
+    const bool setup_enabled = lv_obj_has_state(checkbox_web_setup, LV_STATE_CHECKED);
+    if (wifi_enabled) lv_obj_clear_state(checkbox_web_setup, LV_STATE_DISABLED);
+    else lv_obj_add_state(checkbox_web_setup, LV_STATE_DISABLED);
+
+    if (wifi_enabled && setup_enabled) lv_obj_clear_state(checkbox_ap_password, LV_STATE_DISABLED);
+    else lv_obj_add_state(checkbox_ap_password, LV_STATE_DISABLED);
+
+    if (wifi_enabled) lv_obj_clear_state(checkbox_allow_unsecure, LV_STATE_DISABLED);
+    else lv_obj_add_state(checkbox_allow_unsecure, LV_STATE_DISABLED);
+}
+
+static void wifi_options_event_cb(lv_event_t *) { update_wifi_settings_controls(); }
+
 /* --------------------------------------------------------------------- */
 void settings_screen_create(lv_obj_t *)
 {
@@ -90,6 +111,24 @@ void settings_screen_create(lv_obj_t *)
     lv_checkbox_set_text(checkbox_ac, "Require AC sense");
     lv_obj_align(checkbox_ac, LV_ALIGN_TOP_LEFT, 20, y); y += 40;
 
+    checkbox_wifi = lv_checkbox_create(scr_settings);
+    lv_checkbox_set_text(checkbox_wifi, "Enable Wi-Fi");
+    lv_obj_align(checkbox_wifi, LV_ALIGN_TOP_LEFT, 20, y); y += 40;
+    lv_obj_add_event_cb(checkbox_wifi, wifi_options_event_cb, LV_EVENT_VALUE_CHANGED, nullptr);
+
+    checkbox_web_setup = lv_checkbox_create(scr_settings);
+    lv_checkbox_set_text(checkbox_web_setup, "Enable Wi-Fi setup page");
+    lv_obj_align(checkbox_web_setup, LV_ALIGN_TOP_LEFT, 20, y); y += 40;
+    lv_obj_add_event_cb(checkbox_web_setup, wifi_options_event_cb, LV_EVENT_VALUE_CHANGED, nullptr);
+
+    checkbox_ap_password = lv_checkbox_create(scr_settings);
+    lv_checkbox_set_text(checkbox_ap_password, "Protect setup AP with password");
+    lv_obj_align(checkbox_ap_password, LV_ALIGN_TOP_LEFT, 20, y); y += 40;
+
+    checkbox_allow_unsecure = lv_checkbox_create(scr_settings);
+    lv_checkbox_set_text(checkbox_allow_unsecure, "Allow unsecure connection");
+    lv_obj_align(checkbox_allow_unsecure, LV_ALIGN_TOP_LEFT, 20, y); y += 40;
+
     checkbox_auto_bright = lv_checkbox_create(scr_settings);
     lv_checkbox_set_text(checkbox_auto_bright, "Automatic brightness");
     lv_obj_align(checkbox_auto_bright, LV_ALIGN_TOP_LEFT, 20, y); y += 50;
@@ -122,6 +161,11 @@ void settings_screen_create(lv_obj_t *)
     lv_obj_add_state(checkbox_swap,         prefs.getBool(KEY_SWAP,         false) ? LV_STATE_CHECKED : 0);
     lv_obj_add_state(checkbox_ac,           prefs.getBool(KEY_AC,           false) ? LV_STATE_CHECKED : 0);
     lv_obj_add_state(checkbox_auto_bright,  prefs.getBool(KEY_AUTO_BRIGHT, true)  ? LV_STATE_CHECKED : 0);
+    lv_obj_add_state(checkbox_wifi,         network_wifi_enabled() ? LV_STATE_CHECKED : 0);
+    lv_obj_add_state(checkbox_web_setup,    network_setup_portal_enabled() ? LV_STATE_CHECKED : 0);
+    lv_obj_add_state(checkbox_ap_password,  network_setup_ap_password_enabled() ? LV_STATE_CHECKED : 0);
+    lv_obj_add_state(checkbox_allow_unsecure, network_allow_unsecure_connection() ? LV_STATE_CHECKED : 0);
+    update_wifi_settings_controls();
 
     lv_slider_set_value(slider_max_bright, prefs.getUChar(KEY_MAX_BRIGHT, 255), LV_ANIM_OFF);
     lv_slider_set_value(slider_hyst,       prefs.getUShort(KEY_HYST, 5),      LV_ANIM_OFF);
@@ -152,6 +196,10 @@ void settings_screen_save_and_exit()
     prefs.putBool(KEY_SWAP,         lv_obj_has_state(checkbox_swap,         LV_STATE_CHECKED));
     prefs.putBool(KEY_AC,           lv_obj_has_state(checkbox_ac,           LV_STATE_CHECKED));
     prefs.putBool(KEY_AUTO_BRIGHT,  lv_obj_has_state(checkbox_auto_bright,  LV_STATE_CHECKED));
+    network_set_wifi_enabled(lv_obj_has_state(checkbox_wifi, LV_STATE_CHECKED));
+    network_set_setup_portal_enabled(lv_obj_has_state(checkbox_web_setup, LV_STATE_CHECKED));
+    network_set_setup_ap_password_enabled(lv_obj_has_state(checkbox_ap_password, LV_STATE_CHECKED));
+    network_set_allow_unsecure_connection(lv_obj_has_state(checkbox_allow_unsecure, LV_STATE_CHECKED));
 
     prefs.putUChar(KEY_MAX_BRIGHT, (uint8_t)lv_slider_get_value(slider_max_bright));
     prefs.putUShort(KEY_HYST,      (uint16_t)lv_slider_get_value(slider_hyst));

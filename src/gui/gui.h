@@ -19,6 +19,10 @@ void gui_init();                     // call once from setup()
 void gui_update_state(char *buf);
 void gui_update_temperature(float current, float target, float hyst, float TemperatureFloor, float TemperatureFloorTarget);
 bool gui_check_if_enabled(void);
+void gui_set_thermostat_enabled(bool enabled);
+void gui_update_network_status(bool wifi_enabled, bool setup_ap_available, bool wifi_connecting,
+                               bool wifi_connected, bool internet_accessible,
+                               int server_http_status);
 void gui_UpdateSensorsCount(uint8_t count, bool two_sensors_required);
 
 /* ----- Callbacks used by the thermostat logic --------------------------- */
