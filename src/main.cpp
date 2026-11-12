@@ -8,6 +8,7 @@
 #include "gui/meter.h"
 #include "output.h"
 #include "temperature.h"
+#include "network.h"
 
 SequenceState CurrentSequenceState = IDLE;
 bool CurrentOutState = false;
@@ -27,6 +28,7 @@ void setup()
     gui_init();
     Serial.println("Init temperature sensors");
     temp_Init();
+    network_init();
     Serial.println("Setup done");
     out_BL_init();  // graphics library is initializing BL pin, so we need to reinitialize it after
 }
@@ -56,6 +58,7 @@ void loop_2s()
     f_FloorTempTarget = temp_GetTemperatureTarget(TEMP_SENSOR_FLOOR);
     f_RoomTemperature = temp_GetCachedTemperature(TEMP_SENSOR_ROOM);
     f_FloorTemperature = temp_GetCachedTemperature(TEMP_SENSOR_FLOOR);
+    network_update_telemetry(f_RoomTemperature, f_FloorTemperature, f_RoomTempTarget);
 
     if(gui_check_if_enabled())
     {
@@ -130,6 +133,23 @@ void loop()
 
     lv_tick_inc(10);
     lv_timer_handler();
+
+    ServerCommand server_command;
+    if (network_take_server_command(&server_command)) {
+        if (server_command.has_setpoint)
+            temp_SetTemperatureTarget(TEMP_SENSOR_ROOM, server_command.setpoint_c);
+        if (server_command.has_enabled)
+            gui_set_thermostat_enabled(server_command.enabled);
+    }
+
+    NetworkStatus network_status;
+    network_get_status(&network_status);
+    gui_update_network_status(network_status.wifi_enabled,
+                              network_status.setup_ap_available,
+                              network_status.wifi_connecting,
+                              network_status.wifi_connected,
+                              network_status.internet_accessible,
+                              network_status.server_http_status);
 
     if (u16_Time % 400 == 0) {          // 4 s
         loop_4s();
